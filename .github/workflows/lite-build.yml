@@ -6,7 +6,7 @@ name: lite-build
 
 on:
   push:
-    branches: [lite]
+    branches: [lite, 'hotfix-*']
   workflow_dispatch:
     inputs:
       product:
@@ -196,6 +196,9 @@ jobs:
       - name: The GitHub release script removes its staging dir
         # B-306: a STAGE of its own goes on every exit, a failure while staging too; one given stays
         run: sh scripts/testcases/lite-release-stage-test.sh
+      - name: The GitHub release script takes main or the version's hotfix branch
+        # a patch release X.Y.Z from GitHub's hotfix-X.Y (the guard's --hotfix push), nothing else
+        run: sh scripts/testcases/lite-release-hotfix-test.sh
       - name: The QEMU test's addon e2e waits for GitHub's rate limit
         # task 310: the addon e2e reads GitHub's budget for the address first and waits for the reset
         # within a bound, instead of failing on the rate limit

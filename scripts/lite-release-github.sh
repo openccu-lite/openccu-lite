@@ -9,7 +9,8 @@
 # run by lite-release.yml on the tag, checks that the round in $TREE is the tagged commit and version,
 # and then:
 #   - checks that GitHub's main contains the commit (the lite -> main push is the guard script's,
-#     never this job's: the token cannot push);
+#     never this job's: the token cannot push); a patch release X.Y.Z from a hotfix branch may be
+#     contained in GitHub's hotfix-X.Y instead (the guard's --hotfix push);
 #   - takes per product the update zip, the .ova (x86_64-ova) or the in-place -ccu3.tgz
 #     (aarch64-rpi3), the image's SBOM, each with its .sha256; never the raw .img (over GitHub's
 #     2 GiB per asset, and inside the zip);
@@ -21,12 +22,12 @@
 #     same name is deleted first, three tries, and the uploaded size and GitHub's sha256 digest must
 #     match the local file.
 # No sources archive: the sources are available on request (decision of 2026-09-25).
-# Needs: GH_TOKEN (a fine-grained token for hobbyquaker/openccu-lite, Contents read and write),
+# Needs: GH_TOKEN (a fine-grained token for openccu-lite/openccu-lite, Contents read and write),
 # curl, python3, sha256sum. --dry-run does every local check and the read-only GitHub checks, and
 # writes nothing to GitHub.
 #
 # Environment (defaults for the build host): TREE (/ssd/build/openccu-lite-3899), PRODUCTS
-# ("aarch64-rpi3 aarch64-rpi4 x86_64-ova"), GH_REPO (hobbyquaker/openccu-lite), GH_API
+# ("aarch64-rpi3 aarch64-rpi4 x86_64-ova"), GH_REPO (openccu-lite/openccu-lite), GH_API
 # (https://api.github.com), GH_UPLOADS (https://uploads.github.com), STAGE (a new temporary
 # directory, removed on exit; a STAGE given is kept).
 set -euo pipefail
@@ -38,7 +39,7 @@ V="$1"
 SHA="$2"
 TREE="${TREE:-/ssd/build/openccu-lite-3899}"
 PRODUCTS="${PRODUCTS:-aarch64-rpi3 aarch64-rpi4 x86_64-ova}"
-GH_REPO="${GH_REPO:-hobbyquaker/openccu-lite}"
+GH_REPO="${GH_REPO:-openccu-lite/openccu-lite}"
 GH_API="${GH_API:-https://api.github.com}"
 GH_UPLOADS="${GH_UPLOADS:-https://uploads.github.com}"
 # a STAGE of our own goes on every exit (B-306: each release left a few MB in the runner's /tmp);
@@ -170,13 +171,25 @@ print("lite-release-github: GitHub " + sys.argv[1] + " " + sys.argv[2] + ": " + 
 }
 [ -n "${GH_TOKEN:-}" ] || { [ "$dry" = 1 ] && { say "dry run without GH_TOKEN: GitHub not asked"; exit 0; }; fail "GH_TOKEN is not set"; }
 
-cmp=$(api GET "/repos/$GH_REPO/compare/$SHA...main") || fail "GitHub does not know $SHA: push lite to main with the guard script first"
-python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d["status"] in ("identical","ahead") and d["behind_by"]==0 else 1)' <<< "$cmp" \
-  || fail "GitHub's main does not contain $SHA"
-say "GitHub's main contains $SHA"
+contains() { # branch: GitHub's branch contains $SHA
+  local cmp
+  cmp=$(api GET "/repos/$GH_REPO/compare/$SHA...$1" 2>/dev/null) || return 1
+  python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d["status"] in ("identical","ahead") and d["behind_by"]==0 else 1)' <<< "$cmp"
+}
+# a patch release X.Y.Z (no prerelease part) may come from the hotfix branch hotfix-X.Y instead of
+# main: the guard script's --hotfix push puts it there and never touches main
+HOTFIX=""
+[[ "$V" =~ ^([0-9]+\.[0-9]+)\.[0-9]+$ ]] && HOTFIX="hotfix-${BASH_REMATCH[1]}"
+if contains main; then
+  say "GitHub's main contains $SHA"
+elif [ -n "$HOTFIX" ] && contains "$HOTFIX"; then
+  say "GitHub's $HOTFIX contains $SHA (a hotfix release)"
+else
+  fail "GitHub's main${HOTFIX:+ and $HOTFIX} do not contain $SHA (or GitHub does not know it): push it with the guard script first"
+fi
 
 # occulited's tag v$V goes to GitHub with the release, before it: the notes link it
-OREPO="${OCCULITED_REPO:-hobbyquaker/occulited}"
+OREPO="${OCCULITED_REPO:-openccu-lite/occulited}"
 oref=$(api GET "/repos/$OREPO/git/ref/tags/v$V") || fail "$OREPO has no tag v$V on GitHub: push occulited's tag first"
 otarget=$(python3 -c '
 import json, sys
@@ -206,7 +219,7 @@ if [ "$dry" = 1 ]; then
 fi
 
 if [ -z "$ID" ]; then
-  OCC_NOTE="occulited [\`${PIN:0:7}\`](https://github.com/hobbyquaker/occulited/tree/v$V)"
+  OCC_NOTE="occulited [\`${PIN:0:7}\`](https://github.com/openccu-lite/occulited/tree/v$V)"
   body=$(cat <<EOF
 openccu-lite $V: a Homematic CCU firmware without ReGaHSS, built on OpenCCU $BASE, with $OCC_NOTE. **Alpha software** — read the [README](https://github.com/$GH_REPO/blob/$SHA/README.en.md) first.
 

@@ -121,6 +121,8 @@ jobs:
         run: sh scripts/testcases/lite-qemu-cleanup-test.sh
       - name: The GitHub release script removes its staging dir
         run: sh scripts/testcases/lite-release-stage-test.sh
+      - name: The GitHub release script takes main or the version's hotfix branch
+        run: sh scripts/testcases/lite-release-hotfix-test.sh
       - name: The QEMU test's addon e2e waits for GitHub's rate limit
         run: sh scripts/testcases/lite-qemu-ratelimit-test.sh
       - name: The QEMU test's boot warnings against the allowlist
