@@ -143,6 +143,7 @@ release candidate versions as well) or **dev** (everything, development builds t
 - [Switching from and to OpenCCU](docs/switching.md)
 - [Recommendations](docs/recommendations.de.md) (German)
 - [What differs from OpenCCU](docs/aenderungen.md) (German)
+- [Radio modules and multimacd: every option](docs/radio.en.md)
 
 **Operation**
 - [Local key mode for HmIP](docs/lokaler-schluesselmodus.md): offline-capable, radio module swaps without eQ-3's key

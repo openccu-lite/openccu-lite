@@ -1,95 +1,95 @@
-# Radio modules and multimacd: every option
+# Funkmodule und multimacd: alle Einstellungen
 
-This page lists every setting that decides which radio module the interface processes use, and
-what each combination starts. It is the one complete list; the other documents link here.
+*Deutsch — die englische Fassung ist [radio.en.md](radio.en.md).*
 
-The interface processes:
+Diese Seite führt alle Einstellungen auf, die bestimmen, welches Funkmodul die Schnittstellenprozesse nutzen, und
+was jede Kombination startet. Sie ist die einzige vollständige Liste; die anderen Dokumente verweisen hierher.
 
-- **rfd** - BidCos-RF (classic Homematic radio), on a local module, an HM-CFG-USB-2 and/or BidCos
-  LAN gateways.
-- **hmipserver** - a Java process that runs one of two servers:
-  - **HMIPServer.jar** - HmIP-RF (Homematic IP radio, HmIP-HAPs and DRAPs, HmIP wired) *and* the
-    virtual devices (heating groups and the like, `VirtualDevices`, port 39292);
-  - **HMServer.jar** - the virtual devices alone.
-- **multimacd** - the multiplexer: it opens one radio module on its UART and offers it to rfd
-  (`/dev/mmd_bidcos`) and hmipserver (`/dev/mmd_hmip`) at the same time.
-- **hs485d** - BidCos-Wired (classic Homematic wired), through an HMW-LGW wired LAN gateway.
-- **hmlangw** - only in LAN-gateway mode (below): the system itself acts as a BidCos LAN gateway
-  for another central unit.
+Die Schnittstellenprozesse:
 
-The system detects the modules at every boot and on every hotplug, then makes a plan from the
-hardware and the settings below; *System → Interfaces → Connections* shows the plan (what runs,
-on which module, and why) and changes the settings.
+- **rfd** - BidCos-RF (klassischer Homematic-Funk), auf einem lokalen Funkmodul, einem HM-CFG-USB-2 und/oder
+  BidCos-LAN-Gateways.
+- **hmipserver** - ein Java-Prozess, der einen von zwei Servern betreibt:
+  - **HMIPServer.jar** - HmIP-RF (Homematic-IP-Funk, HmIP-HAPs und DRAPs, HmIP Wired) *und* die virtuellen Geräte
+    (Heizungsgruppen und Ähnliches, `VirtualDevices`, Port 39292);
+  - **HMServer.jar** - nur die virtuellen Geräte.
+- **multimacd** - der Multiplexer: Er öffnet ein Funkmodul an seinem UART und stellt es rfd (`/dev/mmd_bidcos`) und
+  hmipserver (`/dev/mmd_hmip`) gleichzeitig zur Verfügung.
+- **hs485d** - BidCos-Wired (klassisches Homematic Wired), über ein HMW-LGW Wired-LAN-Gateway.
+- **hmlangw** - nur im LAN-Gateway-Modus (siehe unten): Das System arbeitet dann selbst als BidCos-LAN-Gateway für
+  eine andere Zentrale.
 
-## The settings
+Das System erkennt die Funkmodule bei jedem Start und bei jedem Ein- und Ausstecken und erstellt dann aus der Hardware
+und den Einstellungen unten einen Plan. *System → Schnittstellen → Verbindungen* zeigt den Plan (was läuft, auf welchem
+Funkmodul und warum) und ändert die Einstellungen.
 
-| Setting | Where | Values | Default |
+## Die Einstellungen
+
+| Einstellung | Wo | Werte | Standard |
 | --- | --- | --- | --- |
-| **HmIP-RF module** | *Interfaces → Connections → HmIP-RF*; stored as `occulite.hmip.adapter=` in `/etc/config/crRFD/hmip_user.conf` | **Automatic** (no line): the module OpenCCU would pick (an RPI-RF-MOD before an HM-MOD-RPI-PCB), and from then on the module the HmIP network was last on; **a module** (its serial or SGTIN): exactly that one; **None** (`none`): no HmIP at all | Automatic |
-| **HmIP path** | the same dropdown: one entry per module and path; stored as `occulite.hmip.path=` in the same file | **automatic** (no line); **direct** - hmipserver opens the module's UART itself; **multimacd** - through `/dev/mmd_hmip` | automatic |
-| **BidCos-RF module** | *Interfaces → Connections → BidCos-RF*; stored as the first line `# occulite.bidcos.module=` in `/etc/config/rfd.conf` | **Automatic** (no line): an HM-CFG-USB-2 if one is plugged in, else the module OpenCCU would pick (an HM-MOD-RPI-PCB before an RPI-RF-MOD); **a module** (its serial); **None** (`none`): rfd without a local radio - *Off (HmIP only)* without a LAN gateway, *No local radio (LAN gateway only)* with one | Automatic |
-| **BidCos LAN gateways** | *Interfaces → LAN devices*; sections in `/etc/config/rfd.conf` | any number of HM-LGW-O-TW-W-EU / HM-CFG-LAN | none |
-| **HB-RF-ETH** | *Interfaces → LAN devices*; its address | one network radio board; its module then shows up like a module on the header | none |
-| **BidCos-Wired** | *Interfaces → LAN devices*; a section in `/etc/config/hs485d.conf` | an HMW-LGW-O-DR-GS-EU | none |
-| **LAN-gateway mode** | the file `/usr/local/HMLGW` (no page) | present: the system is a BidCos LAN gateway for another central unit | absent |
+| **HmIP-RF-Funkmodul** | *Schnittstellen → Verbindungen → HmIP-RF*; gespeichert als `occulite.hmip.adapter=` in `/etc/config/crRFD/hmip_user.conf` | **Automatisch** (keine Zeile): das Funkmodul, das OpenCCU wählen würde (ein RPI-RF-MOD vor einem HM-MOD-RPI-PCB), und danach das Funkmodul, auf dem das HmIP-Netzwerk zuletzt lief; **ein Funkmodul** (seine Seriennummer oder SGTIN): genau dieses; **Keins** (`none`): gar kein HmIP | Automatisch |
+| **HmIP-Weg** | dieselbe Auswahlliste: ein Eintrag je Funkmodul und Weg; gespeichert als `occulite.hmip.path=` in derselben Datei | **automatisch** (keine Zeile); **direkt** - hmipserver öffnet den UART des Funkmoduls selbst; **multimacd** - über `/dev/mmd_hmip` | automatisch |
+| **BidCos-RF-Funkmodul** | *Schnittstellen → Verbindungen → BidCos-RF*; gespeichert als erste Zeile `# occulite.bidcos.module=` in `/etc/config/rfd.conf` | **Automatisch** (keine Zeile): ein HM-CFG-USB-2, wenn eines eingesteckt ist, sonst das Funkmodul, das OpenCCU wählen würde (ein HM-MOD-RPI-PCB vor einem RPI-RF-MOD); **ein Funkmodul** (seine Seriennummer); **Keins** (`none`): rfd ohne lokales Funkmodul - *Aus (nur HmIP)* ohne LAN-Gateway, *Kein lokales Funkmodul (nur LAN-Gateway)* mit einem | Automatisch |
+| **BidCos-LAN-Gateways** | *Schnittstellen → LAN-Geräte*; Abschnitte in `/etc/config/rfd.conf` | beliebig viele HM-LGW-O-TW-W-EU / HM-CFG-LAN | keine |
+| **HB-RF-ETH** | *Schnittstellen → LAN-Geräte*; seine Adresse | eine Funkplatine im Netzwerk; ihr Funkmodul erscheint dann wie ein Funkmodul auf der Stiftleiste | keine |
+| **BidCos-Wired** | *Schnittstellen → LAN-Geräte*; ein Abschnitt in `/etc/config/hs485d.conf` | ein HMW-LGW-O-DR-GS-EU | keins |
+| **LAN-Gateway-Modus** | die Datei `/usr/local/HMLGW` (keine Seite) | vorhanden: Das System ist ein BidCos-LAN-Gateway für eine andere Zentrale | nicht vorhanden |
 
-A setting is written into the daemons' own files, never flashes firmware, and stays when its module
-is missing: no process is ever moved to another module without the user's choice.
+Eine Einstellung wird in die eigenen Dateien der Dienste geschrieben, flasht nie Firmware und bleibt bestehen, wenn ihr
+Funkmodul fehlt: Kein Prozess wird jemals ohne die Wahl des Benutzers auf ein anderes Funkmodul verlegt.
 
-## What runs
+## Was läuft
 
-**HMServer.jar runs only when HmIP is set to None.** With Automatic or a chosen module hmipserver
-always runs HMIPServer.jar - with its module, or, when none is found or the chosen one is missing,
-without it. HMIPServer.jar cannot start without its module (it waits for it and opens neither
-HmIP-RF nor the virtual devices), so the system then does not start hmipserver at all and says so:
-*Status* (the warning "HmIP-RF and the virtual devices are down") and *Interfaces → Connections*
-name the way out - connect the module, or set HmIP-RF to None. Nothing switches to HMServer.jar by
-itself. (OpenCCU runs HMServer.jar whenever it finds no HmIP module.)
+**HMServer.jar läuft nur, wenn HmIP auf Keins steht.** Mit Automatisch oder einem gewählten Funkmodul betreibt
+hmipserver immer HMIPServer.jar - mit seinem Funkmodul oder, wenn keines gefunden wird oder das gewählte fehlt, ohne
+es. HMIPServer.jar kann ohne sein Funkmodul nicht starten (es wartet darauf und öffnet weder HmIP-RF noch die virtuellen
+Geräte). Das System startet hmipserver dann gar nicht und sagt das: *Status* (die Warnung „HmIP-RF und die virtuellen
+Geräte sind ausgefallen“) und *Schnittstellen → Verbindungen* nennen den Ausweg - das Funkmodul anschließen oder HmIP-RF
+auf Keins stellen. Nichts wechselt von selbst zu HMServer.jar. (OpenCCU betreibt HMServer.jar immer dann, wenn es kein
+HmIP-Funkmodul findet.)
 
-| HmIP-RF | BidCos-RF | Hardware | multimacd | rfd | hmipserver | Interfaces offered |
+| HmIP-RF | BidCos-RF | Hardware | multimacd | rfd | hmipserver | Angebotene Schnittstellen |
 | --- | --- | --- | --- | --- | --- | --- |
-| Automatic / a module | Automatic / the same module | one module that carries both (RPI-RF-MOD, HmIP-RFUSB, HM-MOD-RPI-PCB) on the header, an HB-RF-USB(-2) or HB-RF-ETH, or a dual-firmware HmIP-RFUSB | on the module | through `/dev/mmd_bidcos` (+ LAN gateways) | HMIPServer.jar through `/dev/mmd_hmip` | BidCos-RF, HmIP-RF, VirtualDevices |
-| Automatic / a module | **None** | the same | not for an RPI-RF-MOD or HmIP-RFUSB (hmipserver opens it directly); **yes** for an HM-MOD-RPI-PCB (rule 1) | not without a LAN gateway; on the LAN gateways alone with one | HMIPServer.jar on the module | HmIP-RF, VirtualDevices (+ BidCos-RF with a gateway) |
-| **None** | Automatic / a module | a module that carries both | on the module (rfd reaches a module on a UART only through it) | through `/dev/mmd_bidcos` (+ LAN gateways) | **HMServer.jar** | BidCos-RF, VirtualDevices |
-| **None** | Automatic | an HM-CFG-USB-2 | no | on the HM-CFG-USB-2 (+ LAN gateways) | **HMServer.jar** | BidCos-RF, VirtualDevices |
-| **None** | **None** | any | no | on the LAN gateways alone, or off without one | **HMServer.jar** | VirtualDevices (+ BidCos-RF with a gateway) |
-| Automatic / a module | Automatic | an HM-CFG-USB-2 beside a module (or an HmIP-RFUSB) | no | on the HM-CFG-USB-2 (+ LAN gateways) | HMIPServer.jar directly on the module (an HM-MOD-RPI-PCB: through multimacd, rule 1) | BidCos-RF, HmIP-RF, VirtualDevices |
-| Automatic / a module | Automatic / a module | two modules (e.g. an RPI-RF-MOD on the header and an HB-RF-USB with an HM-MOD-RPI-PCB) | on the BidCos-RF module | through `/dev/mmd_bidcos` | HMIPServer.jar directly on the other module | BidCos-RF, HmIP-RF, VirtualDevices |
-| Automatic / a module | any | an HmIP-only module (HmIP-RFUSB-TK, an HmIP-RFUSB on the HmIP-only firmware, a module without a BidCos address) | only where BidCos-RF has a module of its own on a UART | on that module, the HM-CFG-USB-2 or the gateways; off without | HMIPServer.jar directly on the HmIP-only module (rule 2) | HmIP-RF, VirtualDevices (+ BidCos-RF) |
-| Automatic | any | **no HmIP module found** | only where BidCos-RF has a module on a UART | as above | **not started** (HMIPServer.jar needs its module; warning) | BidCos-RF where rfd runs |
-| a module that is **missing** | any | - | as above | as above | **not started** (warning naming the module) | BidCos-RF where rfd runs |
+| Automatisch / ein Funkmodul | Automatisch / dasselbe Funkmodul | ein Funkmodul, das beides trägt (RPI-RF-MOD, HmIP-RFUSB, HM-MOD-RPI-PCB), auf der Stiftleiste, ein HB-RF-USB(-2) oder HB-RF-ETH, oder ein HmIP-RFUSB mit Dual-Firmware | auf dem Funkmodul | über `/dev/mmd_bidcos` (+ LAN-Gateways) | HMIPServer.jar über `/dev/mmd_hmip` | BidCos-RF, HmIP-RF, VirtualDevices |
+| Automatisch / ein Funkmodul | **Keins** | dasselbe | nicht für ein RPI-RF-MOD oder HmIP-RFUSB (hmipserver öffnet es direkt); **ja** für ein HM-MOD-RPI-PCB (Regel 1) | nicht ohne LAN-Gateway; mit einem nur auf den LAN-Gateways | HMIPServer.jar auf dem Funkmodul | HmIP-RF, VirtualDevices (+ BidCos-RF mit einem Gateway) |
+| **Keins** | Automatisch / ein Funkmodul | ein Funkmodul, das beides trägt | auf dem Funkmodul (rfd erreicht ein Funkmodul an einem UART nur darüber) | über `/dev/mmd_bidcos` (+ LAN-Gateways) | **HMServer.jar** | BidCos-RF, VirtualDevices |
+| **Keins** | Automatisch | ein HM-CFG-USB-2 | nein | auf dem HM-CFG-USB-2 (+ LAN-Gateways) | **HMServer.jar** | BidCos-RF, VirtualDevices |
+| **Keins** | **Keins** | beliebig | nein | nur auf den LAN-Gateways, oder aus ohne eines | **HMServer.jar** | VirtualDevices (+ BidCos-RF mit einem Gateway) |
+| Automatisch / ein Funkmodul | Automatisch | ein HM-CFG-USB-2 neben einem Funkmodul (oder einem HmIP-RFUSB) | nein | auf dem HM-CFG-USB-2 (+ LAN-Gateways) | HMIPServer.jar direkt auf dem Funkmodul (ein HM-MOD-RPI-PCB: über multimacd, Regel 1) | BidCos-RF, HmIP-RF, VirtualDevices |
+| Automatisch / ein Funkmodul | Automatisch / ein Funkmodul | zwei Funkmodule (z. B. ein RPI-RF-MOD auf der Stiftleiste und ein HB-RF-USB mit einem HM-MOD-RPI-PCB) | auf dem BidCos-RF-Funkmodul | über `/dev/mmd_bidcos` | HMIPServer.jar direkt auf dem anderen Funkmodul | BidCos-RF, HmIP-RF, VirtualDevices |
+| Automatisch / ein Funkmodul | beliebig | ein reines HmIP-Funkmodul (HmIP-RFUSB-TK, ein HmIP-RFUSB mit der reinen HmIP-Firmware, ein Funkmodul ohne BidCos-Adresse) | nur, wenn BidCos-RF ein eigenes Funkmodul an einem UART hat | auf diesem Funkmodul, dem HM-CFG-USB-2 oder den Gateways; ohne sie aus | HMIPServer.jar direkt auf dem reinen HmIP-Funkmodul (Regel 2) | HmIP-RF, VirtualDevices (+ BidCos-RF) |
+| Automatisch | beliebig | **kein HmIP-Funkmodul gefunden** | nur, wenn BidCos-RF ein Funkmodul an einem UART hat | wie oben | **nicht gestartet** (HMIPServer.jar braucht sein Funkmodul; Warnung) | BidCos-RF, wo rfd läuft |
+| ein Funkmodul, das **fehlt** | beliebig | - | wie oben | wie oben | **nicht gestartet** (Warnung mit dem Namen des Funkmoduls) | BidCos-RF, wo rfd läuft |
 
-**The HmIP path** changes only how hmipserver reaches its module: *automatic* takes
-multimacd when BidCos-RF shares the module and the module directly otherwise; *direct* and
-*multimacd* force one, where the hardware allows it (the dropdown offers only those). A choice that
-cannot be served is refused before anything changes: *direct* while BidCos-RF uses the same module
-through multimacd, *multimacd* while multimacd already serves another module for BidCos-RF. With HmIP
-set to None there is no path to choose.
+**Der HmIP-Weg** ändert nur, wie hmipserver sein Funkmodul erreicht: *automatisch* nimmt multimacd, wenn BidCos-RF das
+Funkmodul mitbenutzt, und sonst das Funkmodul direkt; *direkt* und *multimacd* erzwingen einen Weg, soweit die Hardware
+das zulässt (die Auswahlliste bietet nur diese an). Eine Wahl, die nicht bedient werden kann, wird abgelehnt, bevor
+sich etwas ändert: *direkt*, während BidCos-RF dasselbe Funkmodul über multimacd nutzt, und *multimacd*, während
+multimacd schon ein anderes Funkmodul für BidCos-RF bedient. Steht HmIP auf Keins, gibt es keinen Weg zu wählen.
 
-**hs485d** runs exactly when an HMW-LGW is configured, whatever the radio settings; BidCos-Wired is
-then in the interface list.
+**hs485d** läuft genau dann, wenn ein HMW-LGW eingerichtet ist, unabhängig von den Funkeinstellungen; BidCos-Wired
+steht dann in der Liste der Schnittstellen.
 
-**LAN-gateway mode** (`/usr/local/HMLGW`) ignores every setting above: multimacd on the BidCos module
-and hmlangw run, rfd, hmipserver and hs485d do not, and no interface is offered on this system.
+**Der LAN-Gateway-Modus** (`/usr/local/HMLGW`) übergeht alle Einstellungen oben: multimacd auf dem BidCos-Funkmodul und
+hmlangw laufen, rfd, hmipserver und hs485d nicht, und auf diesem System wird keine Schnittstelle angeboten.
 
-## The fixed rules
+## Die festen Regeln
 
-1. **An HM-MOD-RPI-PCB carries HmIP only through multimacd**: opened directly, hmipserver
-   hangs after every reset of the module. multimacd serves one module, so HmIP on a PCB and BidCos-RF
-   on another module that needs multimacd cannot run together; the page refuses that choice.
-2. **An HmIP-only module is opened directly**: rfd cannot use it, and multimacd refuses its
-   coprocessor. The radio firmware section flashes the dual firmware onto an HmIP-RFUSB.
-3. **HMServer.jar only with HmIP set to None** - never as a fallback for a missing module.
-4. **No module is replaced unasked:** a chosen module that is missing stays chosen, and on
-   Automatic HmIP-RF stays on the module that holds the HmIP network; moving it to another module is
-   an adapter exchange and needs the user's confirmation.
-5. Only one local module per process; LAN gateways, HmIP-HAPs and DRAPs are not chosen here and can be
-   several.
+1. **Ein HM-MOD-RPI-PCB trägt HmIP nur über multimacd**: Direkt geöffnet hängt hmipserver nach jedem Reset des
+   Funkmoduls. multimacd bedient ein Funkmodul, daher können HmIP auf einem PCB und BidCos-RF auf einem anderen
+   Funkmodul, das multimacd braucht, nicht zusammen laufen; die Seite lehnt diese Wahl ab.
+2. **Ein reines HmIP-Funkmodul wird direkt geöffnet**: rfd kann es nicht nutzen, und multimacd lehnt seinen
+   Koprozessor ab. Der Bereich Funk-Firmware flasht die Dual-Firmware auf ein HmIP-RFUSB.
+3. **HMServer.jar nur, wenn HmIP auf Keins steht** - nie als Ersatz für ein fehlendes Funkmodul.
+4. **Kein Funkmodul wird ungefragt ersetzt:** Ein gewähltes Funkmodul, das fehlt, bleibt gewählt, und auf Automatisch
+   bleibt HmIP-RF auf dem Funkmodul, das das HmIP-Netzwerk hält; der Umzug auf ein anderes Funkmodul ist ein
+   Adaptertausch und braucht die Bestätigung des Benutzers.
+5. Nur ein lokales Funkmodul je Prozess; LAN-Gateways, HmIP-HAPs und DRAPs werden hier nicht gewählt, und es können
+   mehrere sein.
 
-Switching HmIP to None takes HmIP-RF away: paired HmIP devices are out of reach until HmIP is set back,
-but their pairings, keys and the HmIP network stay on the system (the page asks before the change).
-Setting it back to Automatic or the module brings them back. None saves hmipserver about half its
-memory: about 155 MB against about 300-330 MB for HMIPServer.jar, measured on a Pi 4.
+Wird HmIP auf Keins gestellt, fällt HmIP-RF weg: Angelernte HmIP-Geräte sind nicht erreichbar, bis HmIP wieder
+eingestellt ist, aber ihre Anlernungen, Schlüssel und das HmIP-Netzwerk bleiben auf dem System (die Seite fragt vor der
+Änderung nach). Zurück auf Automatisch oder das Funkmodul bringt sie wieder. Keins spart hmipserver etwa die Hälfte
+seines Speichers: etwa 155 MB gegenüber etwa 300-330 MB für HMIPServer.jar, gemessen auf einem Pi 4.
 
-The API behind the page is `GET`/`PUT /api/system/v1/radio/connections` in occulited's
-`docs/system-api.md`.
+Die API hinter der Seite ist `GET`/`PUT /api/system/v1/radio/connections` in `docs/system-api.md` von occulited.

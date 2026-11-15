@@ -676,7 +676,7 @@ firewall. The same hook shape fits `rfd`'s `Listen IP` once someone wants it the
 
 **What it does not cover:** the BidCos-only branch of `S62HMServer` (no HmIP module detected —
 a container without hardware, or a plain HM-only system; on openccu-lite since occulited task 147
-only HmIP set to None, see [radio.md](radio.md)) starts `HMServer.jar` with
+only HmIP set to None, see [radio.en.md](radio.en.md)) starts `HMServer.jar` with
 `/var/etc/HMServer.conf` (`hmServerPort=39292`), and that server has no bind property in its
 classes. There the firewall's rules keep 39292 off the LAN, as upstream has it. Verified on the
 second lite image: `:::39292` listening in a container, `Listen IP = 127.0.0.1` present in

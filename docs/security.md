@@ -293,9 +293,10 @@ account and policy, staging an update — goes over the socket `/run/occulite/he
   operation;
 - named operations on exact paths for the sensitive cases: root's password (one hash into one line of `shadow`, which
   occulited never reads), root's `authorized_keys`, ending an SSH session, the certificate, an addon's account and
-  policy files, the ownership of an addon's tree, a disk's SMART read (exactly `smartctl -j -H -A -i <disk>`), the
-  log files' names and sizes in an addon's directory (never their content), an X-Sendfile file handed back as a
-  descriptor.
+  policy files, the ownership of an addon's tree, taking the group and world write bits off the six root-owned parents
+  of the addon directories (only ever taking bits away), a disk's SMART read (exactly `smartctl -j -H -A -i <disk>`),
+  the Pi firmware's throttling state (exactly `vcgencmd get_throttled`), the log files' names and sizes in an addon's
+  directory (never their content), an X-Sendfile file handed back as a descriptor.
 
 The helper resolves every path itself, follows only the image's own symlinks, and acts through directory descriptors
 with `O_NOFOLLOW`; a refusal is logged. The operations, their checks and the bugs found at this boundary are in the
