@@ -4,4 +4,4 @@ sha256  aa9639372555d45bf15b818ae303075ce0c27874a11e1276e48f120718bcb912  licens
 sha256  edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6  licenses/gpl-2.0.txt
 sha256  20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95  licenses/lgpl-2.1.txt
 # GitHub's archive of openccu-lite/OpenCCU-Base at the pinned tag (tasks 348, 352; the branch lite)
-sha256  d7e96f060814661150018ee2c430f1016f4cc046909a15fa1d73b7c86c745a38  openccu-base-v2.0.0-beta.4.tar.gz
+sha256  2c6ce87319884bf929dc38ae00996bcd626598d28708294262420bcb49f9a26c  openccu-base-v2.0.0-beta.5.tar.gz
