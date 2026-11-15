@@ -156,6 +156,15 @@ fi
 need occu-fstrim.service multi-user.target
 need occu-backup-create@.service multi-user.target occulited.service
 need occu-backup-deliver@.service occu-backup-create@%i.service
+# occulited B-146: the backup's root half runs createBackup.sh at the lowest priority, with the
+# settings occulited gives its own transient occulite-backup-script.service
+for kv in IOSchedulingClass=idle Nice=19 CPUWeight=idle MemoryHigh=256M; do
+  if grep -qx "$kv" "$U/occu-backup-create@.service"; then
+    ok "occu-backup-create@.service has $kv"
+  else
+    bad "occu-backup-create@.service needs $kv (the backup at the lowest priority)"
+  fi
+done
 
 # the watchdog is systemd's own: no unit orders against the old one
 never occu-init-host.service occu-watchdog.service

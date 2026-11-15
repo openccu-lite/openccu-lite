@@ -22,8 +22,14 @@ ConditionPathExists=/usr/bin/occulited
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/occulited -backup create %i
-Nice=10
+# the lowest priority systemd gives, as occulited's own runs of createBackup.sh: the archive is
+# written and read back several times, and at a normal priority a large /usr/local starved the
+# system (the services' I/O, the journal, the watchdog); the memory ceiling makes the kernel reclaim
+# the archive's page cache inside this unit before it pushes the services' working sets out
 IOSchedulingClass=idle
+Nice=19
+CPUWeight=idle
+MemoryHigh=256M
 # a 1 GB backup onto a slow share over a Pi 3's 100 Mbit
 TimeoutStartSec=3h
 # its own mount namespace (a slave: the targets' automounts below /media reach it); /usr and /etc
