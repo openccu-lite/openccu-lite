@@ -48,6 +48,9 @@
 ^systemd: Failed to start crond\.service\.$ ## boot 2: the test masks crond through unit-switch.json
 ^rfd: UnifiedLanCommController::connect\(\): Unable to connect\.$ ## boot 2: the test seeds an unreachable LAN gateway
 ^rfd: CCU2LGWCommController::init\(\): Cannot connect to HomeMatic Lan Gateway with serial number KEQ0123456\.$ ## boot 2: the seeded gateway
+^rfd: CCU2LGWCommController::init\(\): Cannot connect to HomeMatic Lan Gateway with serial number KEQ0123456\. Retrying in the background\.$ ## boot 2: the seeded gateway; since OpenCCU-Base #383 rfd keeps a gateway it cannot reach at its start and connects it once it answers
+^rfd: CCU2BidcosRemoteInterface::DonateAddress\(\): Error retrieving default address\.$ ## boot 2: the seeded gateway is rfd's only interface and does not answer, so no interface gives rfd its BidCoS address (#383: rfd stays up instead of ending)
+^rfd: No BidCoS-Address set and no Interface to beg it from$ ## boot 2: the line above's consequence
 ^rfd: No BidCoS-Interface available$ ## boot 2: the seeded gateway is rfd's only interface
 ^systemd: rfd\.service: Failed with result 'exit-code'\.$ ## boot 2: rfd without its seeded gateway
 ^systemd: Failed to start BidCos-RF Interface\.$ ## boot 2: the same
