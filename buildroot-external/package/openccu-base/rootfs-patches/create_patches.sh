@@ -86,6 +86,7 @@ while IFS= read -r patch_name || [[ -n $patch_name ]]; do
 done <"${script_dir}/series"
 
 for patch_file in "${script_dir}"/*.patch; do
+  [[ -e $patch_file ]] || continue # no patch at all: the series is empty
   patch_name=${patch_file##*/}
   [[ -n ${seen[$patch_name]+x} ]] || die "patch is not listed in series: $patch_name"
 done

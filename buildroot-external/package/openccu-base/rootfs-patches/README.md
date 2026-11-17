@@ -1,13 +1,17 @@
-# openccu-lite: the rootfs patches from OpenCCU
+# openccu-lite: the rootfs patch series
 
-These are OpenCCU's rootfs patches, cut to the sections openccu-lite applies (tasks 388, 389):
-only changes to files the image builds and ships - the homematic Tcl package
+Until 2.0.0-beta.6 these were OpenCCU's rootfs patches, cut to the sections openccu-lite applies
+(tasks 388, 389): only changes to files the image builds and ships - the homematic Tcl package
 (`usr/lib/tcl8.2/homematic/`) and the WebUI files openccu-lite keeps at the CCU's paths for
 addons (task 331): the device pictures under `www/config/img/devices/`,
 `www/config/devdescr/DEVDB.tcl`, `www/config/stringtable_de.txt` and
-`www/webui/js/lang/<lang>/translate.lang*.js`. OpenCCU's other patches and sections change the
-WebUI, ReGaHss and HMServer's pages, which openccu-lite does not build; they were removed. The
-numbers and names stay OpenCCU's, so a patch can be traced to its upstream original.
+`www/webui/js/lang/<lang>/translate.lang*.js`.
+
+**Since 2.0.0-beta.7 the series is empty** (task 459): OpenCCU-Base 3.89.12 carries every OpenCCU
+rootfs patch itself (upstream OpenCCU has no `rootfs-patches/` any more), so all 41 were in the
+source already - 40 refused as previously applied, and 0168 would have added its translation key a
+second time. The machinery stays for a patch of openccu-lite's own on those files: `lite_series.py`
+passes an empty series and still refuses a section on anything else.
 
 The numbered directories are the editable source of truth. Each file to be changed is stored as
 a pristine `rootfs/path.orig` file and its modified `rootfs/path` file. The adjacent numbered

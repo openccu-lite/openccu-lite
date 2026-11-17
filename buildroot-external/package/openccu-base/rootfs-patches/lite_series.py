@@ -9,7 +9,9 @@ to patch and, of the WebUI's www/ tree, only what openccu-lite ships at the CCU'
 (task 331): the device pictures (www/config/img/devices/), DEVDB.tcl, stringtable_de.txt and the
 translate.lang*.js files (KEPT_WWW). Until task 389 this script cut OpenCCU's complete series down
 to those sections at build time; since then the series in PATCH_DIR holds exactly those sections
-(tasks 388, 389) and the build applies it as it is. This script is the guard that keeps it so: it
+(tasks 388, 389) and the build applies it as it is. Since 2.0.0-beta.7 the series is empty: OpenCCU-Base
+3.89.12 carries every OpenCCU rootfs patch it held (task 459), and an empty series passes. This
+script is the guard that keeps the series so: it
 fails when a patch has a section on any other file (an upstream merge that brings a WebUI change
 is named instead of failing later in the build, or being dropped without a word) or no section
 at all. Hunks are parsed by their line counts, so a removed line that itself starts with "-- " is
@@ -90,6 +92,9 @@ def main():
                    for path in paths if not applies(path)]
     if errors:
         raise SystemExit("lite_series: ERROR:\n  " + "\n  ".join(errors))
+    if not names:
+        print("lite_series: the series is empty, nothing to apply")
+        return
     print("lite_series: all %d patches change only files openccu-lite builds and ships" % len(names))
 
 if __name__ == "__main__":

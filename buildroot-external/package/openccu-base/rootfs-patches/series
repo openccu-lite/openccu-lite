@@ -1,41 +1,5 @@
-0001-OpenCCU.patch
-0007-WebUI-Enhanced-FirmwareUpdate.patch
-0012-WebUI-RecoveryButton.patch
-0013-WebUI-SecKeyChangesDisplay.patch
-0019-WebUI-EqualThanCondition.patch
-0034-WebUI-Addon-Config.patch
-0039-WebUI-Fix-Style-Glitches.patch
-0040-WebUI-AddonInstallNoReboot.patch
-0043-WebUI-SysVarFavorites-SortByName.patch
-0044-WebUI-DisableDeviceServiceMsg.patch
-0061-WebUI-MenuSortedIcons.patch
-0071-WebUI-ProgramList-DeleteProgramHint.patch
-0073-WebUI-AstroDelays.patch
-0077-WebUI-NegateCondition.patch
-0090-WebUI-Add-ReGaSaveButton.patch
-0097-WebUI-SetSysvarValueByUser.patch
-0099-WebUI-Add-DeviceRenameAllChannels.patch
-0104-WebUI-Add-AssignFunctionAndRoomToHmRFChan0.patch
-0109-WebUI-Fix-SystemLanguageDefaultNames.patch
-0122-WebUI-ProgramExecutionWithConditionCheck.patch
-0128-WebUI-Fix-UpdateAccessPointButton.patch
-0131-WebUI-ShowAddonUpdatesOnStartpage.patch
-0134-WebUI-Add-ShowInternalSysvars.patch
-0135-WebUI-Add-ControlPanel-AdvancedSettings.patch
-0136-WebUI-Add-Tailscale-VPN.patch
-0137-WebUI-Add-NoInterfaceWarning.patch
-0141-WebUI-Add-LoggedOnUserInformation.patch
-0143-WebUI-Fix-Translation.patch
-0144-WebUI-ControlForMaintenanceChannel.patch
-0146-WebUI-ImprovedStartpageLayout.patch
-0147-WebUI-Fix-AddonUninstallFailureHandling.patch
-0155-WebUI-Add-HmIP-RFUSB-Support.patch
-0156-WebUI-ImprovedConfirmDeletePopup.patch
-0163-WebUI-ImprovedFileUploadButton.patch
-0164-WebUI-Add-HMIPServerLogConfiguration.patch
-0165-WebUI-ShowFreeUserspaceOnMaintenancePage.patch
-0168-WebUI-Add-ImprovedLogout.patch
-0171-WebUI-Add-HmIPKeyTransceiverCentralLinkConfiguration.patch
-0183-WebUI-ImprovedFirmwareupdateDialog.patch
-0194-WebUI-Add-MissingChannelDescriptions.patch
-0205-WebUI-Remove-FieldTestBetaFw.patch
+# The rootfs patch series openccu-lite applies after CMake has staged build/rootfs, one patch name
+# per line, in order. Empty since 2.0.0-beta.7: OpenCCU-Base 3.89.12 carries every OpenCCU rootfs
+# patch the series held (OpenCCU itself has none any more), so none of them applies to it. A
+# patch of openccu-lite's own on the homematic Tcl package or the WebUI files for addons goes here;
+# lite_series.py keeps anything else out (see README.md).

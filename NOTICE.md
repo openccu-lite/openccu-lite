@@ -28,5 +28,6 @@ the system renders, and this file is its notice.
 | `buildroot-external/overlay/lite/etc/config_templates/rfd.conf` | the `rfd.conf` template | rfd listens on the loopback only, logs to syslog |
 | `buildroot-external/overlay/lite/etc/config_templates/log4j2.xml` | hmipserver's logging configuration | one appender to the journal, the level set from the Log page |
 
-The patches under `buildroot-external/package/openccu-base/rootfs-patches/` that change eQ-3 files of
-OpenCCU-Base come from upstream OpenCCU.
+The rootfs patches that changed eQ-3 files of OpenCCU-Base came from upstream OpenCCU; since
+2.0.0-beta.7 OpenCCU-Base carries them itself, and the series under
+`buildroot-external/package/openccu-base/rootfs-patches/` is empty.

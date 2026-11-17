@@ -6,7 +6,8 @@
 #    them pass; another file, a directory of the WebUI, a link, a picture outside 50/ and 250/, a
 #    file not 0644, a directory not 0755, a missing DEVDB.tcl or too few pictures stop the build.
 # 2. rootfs-patches/lite_series.py refuses a series with a section on anything but those files and
-#    the homematic Tcl package, and an empty patch; the real series passes (tasks 388, 389).
+#    the homematic Tcl package, and an empty patch; the real series passes (tasks 388, 389) and is
+#    empty since OpenCCU-Base 3.89.12 carries OpenCCU's rootfs patches (task 459).
 # 3. rootfs-patches/stage_lite_www.sh on a made-up source tree: the files staged with their modes,
 #    DEVDB.tcl generated in sorted order whatever order the file system lists the descriptions in,
 #    and a source without the pictures refused. Needs tclsh (skipped without it, said so).
@@ -152,11 +153,15 @@ if python3 "$RP/lite_series.py" "$RP" >"$T/out" 2>&1; then
 else
   fail "lite_series.py on the real series: $(cat "$T/out")"
 fi
-for p in 0034-WebUI-Addon-Config.patch 0104-WebUI-Add-AssignFunctionAndRoomToHmRFChan0.patch 0109-WebUI-Fix-SystemLanguageDefaultNames.patch; do
-  if grep -qx "$p" "$RP/series"; then ok "the real series keeps $p"; else fail "the real series lost $p"; fi
+# task 459: OpenCCU-Base 3.89.12 carries OpenCCU's rootfs patches, so the series is empty; one of
+# them back would be applied twice (refused as previously applied, or a translation key doubled)
+for p in 0001-OpenCCU 0034-WebUI-Addon-Config 0104-WebUI-Add-AssignFunctionAndRoomToHmRFChan0 0168-WebUI-Add-ImprovedLogout; do
+  if grep -q "^$p" "$RP/series" || [ -e "$RP/$p.patch" ] || [ -e "$RP/$p" ]; then fail "OpenCCU's $p is back (OpenCCU-Base carries it)"; else ok "no $p (OpenCCU-Base carries it)"; fi
 done
+if grep -q '^[^#[:space:]]' "$RP/series"; then fail "the series lists a patch: $(grep '^[^#[:space:]]' "$RP/series" | tr '\n' ' ')"; else ok "the series is empty"; fi
+if (cd "$RP" && bash ./create_patches.sh --check) >"$T/out" 2>&1; then ok "create_patches.sh --check passes the empty series"; else fail "create_patches.sh --check on the empty series: $(cat "$T/out")"; fi
 # task 388: the ReGaHss hooks bin/hm_autoconf, hm_deldev and hm_startup are not shipped
-if grep -h '^[-+][-+][-+] ' "$RP"/*.patch | grep -E '/bin/hm_(autoconf|deldev|startup)'; then
+if cat "$RP"/*.patch 2>/dev/null | grep '^[-+][-+][-+] ' | grep -E '/bin/hm_(autoconf|deldev|startup)'; then
   fail "a rootfs patch still changes bin/hm_* (above)"
 else
   ok "no rootfs patch changes bin/hm_*"

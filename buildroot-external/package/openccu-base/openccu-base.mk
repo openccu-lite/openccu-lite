@@ -4,31 +4,20 @@
 #
 ################################################################################
 
-# OpenCCU-Base 3.89.11 plus five fixes from its main branch, cherry-picked (-x) onto the branch
-# lite of the fork openccu-lite/OpenCCU-Base (openccu-lite task 348): libXmlRpc #138 (nested
-# system.multicall) and #140 (BIN-RPC length fields), rfd #115 and #116 (serial read errors),
-# eq3_char_loop 1.6 #112 (hang up slaves when their master closes); and four fixes of our own for
-# OpenCCU-Base's issues, offered upstream: rfd and hs485d end cleanly on SIGTERM, rfd's USB and
-# LAN receive threads stopped first (#164), rfd keeps a channel's AES policy when the coprocessor
-# is re-initialised (#165), libhsscomm's init and event callbacks are bounded by a timeout (#170,
-# #171). Since 1.0.0-beta.3 also from OpenCCU-Base's main: libXmlRpc's nesting limit (#189) and
-# its regenerated prebuilts (#190, unused here), the CFM-TW LED linkset (#63, formerly rootfs patch
-# 0003) and the component switches (#56); and rfd's receive thread no longer deadlocks on its exit
-# mutex when stopped (B-319). Since 1.0.0-beta.4 two more of our own: rfd no longer flushes the
-# serial input before every command (#173) and treats end of file on the serial device as a read
-# error (#162). Since 2.0.0-beta.0 eQ-3's HMIPServer 1.5.1 (HMIPServer.jar, HMServer.jar,
-# ESHBridge.jar; homematicip/OpenCCU-Base #16, cherry-picked); since 2.0.0-beta.1 crRFD.conf's
-# Legacy.Client.Socket.Timeout 30000 ms; since 2.0.0-beta.3 eQ-3's HMIPServer 1.5.2-SNAPSHOT (the
-# same three jars, homematicip/OpenCCU-Base #17, cherry-picked); since 2.0.0-beta.4 crRFD.conf's
-# Legacy.Client.Connection.Timeout 30000 ms (OpenCCU/OpenCCU-Base #361, cherry-picked). Back to
-# OpenCCU/OpenCCU-Base at its next tag.
+# OpenCCU-Base 3.89.12 (since 2.0.0-beta.7, openccu-lite task 456) from the branch
+# lite of the fork openccu-lite/OpenCCU-Base: upstream's main 53b4aa04 (3.89.12 with #371, #374 and #380,
+# which carries every fix the branch had picked or contributed since 3.89.11), plus eQ-3's
+# HMServer.jar of HMIPServer 1.5.2-SNAPSHOT (upstream keeps its HomeMatic-only build) and our fix
+# for OpenCCU-Base #383 (rfd keeps a LAN gateway that is not reachable at its start; upstream pull
+# request #384). Until 2.0.0-beta.6 the branch was 3.89.11 plus picks (openccu-lite task 348).
+# Back to OpenCCU/OpenCCU-Base at its next tag that has all of them.
 # The version is a tag of the fork: every build round tags the commit of the fork's lite branch
 # it builds with the image version (v1.0.0-<pre>.<N>, annotated) and pins that tag here
 # (task 352); a tag never moves once pushed. The compat version is the release's identity
 # (PRODUCT_VERSION, the recovery's hm-platform; the top Makefile reads both lines) and stays the
 # release while the version is a tag of the fork.
-OPENCCU_BASE_VERSION = v2.0.0-beta.6
-OPENCCU_BASE_COMPAT_VERSION = 3.89.11
+OPENCCU_BASE_VERSION = v2.0.0-beta.7
+OPENCCU_BASE_COMPAT_VERSION = 3.89.12
 # GitHub's archive of that tag (the recovery's hm-platform downloads OpenCCU-Base's own
 # release archive of the compat version), pruned right after the extract to the paths
 # openccu-base-paths.txt lists: the build sees nothing else, so a file that list does not name
@@ -143,9 +132,10 @@ endif
 
 # Apply the rootfs patch series after CMake has generated the device types and the homematic Tcl
 # package, but before any files are installed into TARGET_DIR. The pruned source has neither the
-# WebUI nor HMServer's pages, and the series holds only OpenCCU's patch sections on what openccu-lite
+# WebUI nor HMServer's pages, and the series may hold only patch sections on what openccu-lite
 # builds and ships: the homematic Tcl package and the WebUI files staged above (tasks 329, 331, 335,
-# 388, 389). lite_series.py stops the build if a section on anything else has come in.
+# 388, 389). lite_series.py stops the build if a section on anything else has come in. The series
+# is empty since OpenCCU-Base 3.89.12, which carries OpenCCU's rootfs patches (task 459).
 define OPENCCU_BASE_APPLY_ROOTFS_PATCHES
 	test -s "$(@D)/build/rootfs/usr/lib/tcl8.2/homematic/homematic.tcl"
 	test -s "$(@D)/build/rootfs/firmware/rftypes/rf_cfm_tw.xml"
