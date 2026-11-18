@@ -5,18 +5,18 @@
 ################################################################################
 
 # OpenCCU-Base 3.89.12 (since 2.0.0-beta.7, openccu-lite task 456) from the branch
-# lite of the fork openccu-lite/OpenCCU-Base: upstream's main 53b4aa04 (3.89.12 with #371, #374 and #380,
-# which carries every fix the branch had picked or contributed since 3.89.11), plus eQ-3's
-# HMServer.jar of HMIPServer 1.5.2-SNAPSHOT (upstream keeps its HomeMatic-only build) and our fix
-# for OpenCCU-Base #383 (rfd keeps a LAN gateway that is not reachable at its start; upstream pull
-# request #384). Until 2.0.0-beta.6 the branch was 3.89.11 plus picks (openccu-lite task 348).
+# lite of the fork openccu-lite/OpenCCU-Base: upstream's main (since 2.0.0-beta.8 52622889: 3.89.12
+# with #371, #374, #380, #384 and #385, which carries every fix the branch had picked or contributed
+# since 3.89.11, our fix for OpenCCU-Base #383 included), plus eQ-3's HMServer.jar of HMIPServer
+# 1.5.2-SNAPSHOT (upstream keeps its HomeMatic-only build) and the fork's README and workflow
+# commits. Until 2.0.0-beta.6 the branch was 3.89.11 plus picks (openccu-lite task 348).
 # Back to OpenCCU/OpenCCU-Base at its next tag that has all of them.
 # The version is a tag of the fork: every build round tags the commit of the fork's lite branch
 # it builds with the image version (v1.0.0-<pre>.<N>, annotated) and pins that tag here
 # (task 352); a tag never moves once pushed. The compat version is the release's identity
 # (PRODUCT_VERSION, the recovery's hm-platform; the top Makefile reads both lines) and stays the
 # release while the version is a tag of the fork.
-OPENCCU_BASE_VERSION = v2.0.0-beta.7
+OPENCCU_BASE_VERSION = v2.0.0-beta.8
 OPENCCU_BASE_COMPAT_VERSION = 3.89.12
 # GitHub's archive of that tag (the recovery's hm-platform downloads OpenCCU-Base's own
 # release archive of the compat version), pruned right after the extract to the paths
