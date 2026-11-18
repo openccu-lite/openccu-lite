@@ -1,0 +1,85 @@
+#!/bin/sh
+# openccu-lite: hmipserver.service's ExecStartPost - a watchdog for a start of HMIPServer.jar that
+# never binds its own HTTP port.
+#
+# TO BE REMOVED once upstream fixes it (openccu-lite B-348; upstream:
+# https://github.com/OpenCCU/OpenCCU-Base/issues/392). Remove this script, its ExecStartPost= line in
+# hmipserver.service, scripts/testcases/lite-hmip-start-watch-test.sh and its line in
+# .github/workflows/lite-build.yml and lite-check.yml, and docs/upstream-delta.md's row.
+#
+# eQ-3's HMIPServer 1.5.2 can hang in its start: its VirtualDevices port (HMServer.conf's
+# hmServerPort, 39292) is never bound, the server logs "Could not synchronize interface
+# HmIP-RF_java; retrying" every 30 s for as long as it runs, and VirtualDevices stays down. HmIP-RF
+# itself (32010) answers, so the ready step passes. A restart cures it. On a good start the port is
+# bound before the ready step ends (seen 3-5 s before systemd's "Started"); this checks it the
+# given number of seconds after the ready step and restarts the unit when it is still not bound.
+#
+# Limits: at most MAX restarts per boot (the count lives in /run), only for HMIPServer.jar
+# (HMIP_CLASS from the unit's environment; HMServer.jar with HmIP set to none is not watched), only
+# while the JVM this start began is still the unit's main process and the unit is active, never
+# while the system shuts down, a radio change holds the units or the recovery is due. The unit's
+# stop ends the watch: it runs in the unit's control group.
+#
+# Usage (the unit's line): lite-hmip-start-watch           - forks the watch and returns at once
+#                          lite-hmip-start-watch --watch   - the watch itself, in the foreground
+set -u
+DELAY=${HMIP_WATCH_DELAY:-90}
+MAX=${HMIP_WATCH_MAX:-2}
+UNIT=hmipserver.service
+SYSTEMCTL=${HMIP_WATCH_SYSTEMCTL:-systemctl}
+STATE=${HMIP_WATCH_STATE:-/run/lite-hmip-start-watch}
+CONF=${HMIP_WATCH_CONF:-/var/etc/HMServer.conf}
+PROC_NET=${HMIP_WATCH_PROC_NET:-/proc/net}
+RADIO_DIR=${OCCU_RADIO_RUN_DIR:-/run/occulite/radio}
+RECOVERY=${HMIP_WATCH_RECOVERY:-/usr/local/.recoveryMode}
+SERVER_CLASS=de.eq3.ccu.server.ip.HMIPServer
+
+if [ "${1:-}" != --watch ]; then
+  [ "${HMIP_CLASS:-}" = "$SERVER_CLASS" ] || exit 0
+  [ -n "${MAINPID:-}" ] || exit 0
+  "$0" --watch </dev/null &
+  exit 0
+fi
+
+[ "${HMIP_CLASS:-}" = "$SERVER_CLASS" ] || exit 0
+pid=${MAINPID:-}
+case "$pid" in '' | *[!0-9]*) exit 0 ;; esac
+
+port=
+if [ -r "$CONF" ]; then
+  port=$(sed -n 's/^[[:space:]]*hmServerPort[[:space:]]*=[[:space:]]*\([0-9][0-9]*\)[[:space:]]*$/\1/p' "$CONF" | tail -n 1)
+fi
+[ -n "$port" ] || port=39292
+
+listening() {
+  hex=$(printf '%04X' "$1")
+  cat "$PROC_NET/tcp" "$PROC_NET/tcp6" 2>/dev/null |
+    awk -v p="$hex" '$4 == "0A" { n = split($2, a, ":"); if (toupper(a[n]) == p) found = 1 } END { exit !found }'
+}
+
+sleep "$DELAY"
+
+listening "$port" && exit 0
+
+# still this start, and nothing else going on
+[ "$("$SYSTEMCTL" show -p MainPID --value "$UNIT" 2>/dev/null)" = "$pid" ] || exit 0
+[ "$("$SYSTEMCTL" is-active "$UNIT" 2>/dev/null)" = active ] || exit 0
+[ "$("$SYSTEMCTL" is-system-running 2>/dev/null)" = stopping ] && exit 0
+[ -e "$RADIO_DIR/changing" ] && exit 0
+[ -e "$RECOVERY" ] && exit 0
+# the port may have come up while the checks ran
+listening "$port" && exit 0
+
+mkdir -p "$STATE" 2>/dev/null
+count=0
+[ -r "$STATE/restarts" ] && read -r count _ <"$STATE/restarts"
+case "$count" in '' | *[!0-9]*) count=0 ;; esac
+if [ "$count" -ge "$MAX" ]; then
+  # <4>: journald stores the line as a warning
+  echo "<4>lite-hmip-start-watch: port $port still not bound $DELAY s after the start; not restarting again ($count restarts this boot, at most $MAX) - VirtualDevices stays down until hmipserver is restarted"
+  exit 0
+fi
+count=$((count + 1))
+echo "$count" >"$STATE/restarts"
+echo "<4>lite-hmip-start-watch: port $port not bound $DELAY s after the start (the HMIPServer start hang, a known upstream bug), restarting hmipserver ($count of at most $MAX this boot)"
+exec "$SYSTEMCTL" --no-block restart "$UNIT"

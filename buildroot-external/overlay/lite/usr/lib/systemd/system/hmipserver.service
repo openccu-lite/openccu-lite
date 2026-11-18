@@ -91,6 +91,12 @@ Environment=LD_PRELOAD=/usr/lib/openccu-lite/libbindlo.so
 Environment=BINDLO_PORTS=39292
 ExecStart=/opt/java/bin/java $HMIP_JAVA_OPTS -Dlog4j.configurationFile=file:///var/etc/log4j2.xml -Dfile.encoding=ISO-8859-1 -cp ${HMIP_CLASSPATH} ${HMIP_CLASS} $HMIP_ARGS
 ExecStartPost=+/usr/bin/occulited radio ready hmipserver
+# A workaround, to be removed once upstream fixes it
+# (https://github.com/OpenCCU/OpenCCU-Base/issues/392): HMIPServer.jar can hang in its start with
+# its VirtualDevices port never bound. 90 s after the ready step the watch restarts the unit when
+# the port is still not listening, at most twice per boot; it runs in the background, in this
+# unit's control group, so a stop ends it. See the script.
+ExecStartPost=-+/usr/libexec/occu/lite-hmip-start-watch
 ExecStartPost=-+/usr/libexec/occu/lite-psplash done S62HMServer
 ExecStopPost=-+/usr/bin/occulited radio stopped hmipserver
 KillMode=control-group
