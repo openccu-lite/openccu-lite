@@ -16,7 +16,7 @@
 #
 ################################################################################
 
-GENERIC_RAW_UART_VERSION = v2.0.0-beta.7
+GENERIC_RAW_UART_VERSION = v2.0.0-beta.8
 GENERIC_RAW_UART_SITE = $(call github,openccu-lite,piVCCU,$(GENERIC_RAW_UART_VERSION))
 GENERIC_RAW_UART_LICENSE = GPL2
 GENERIC_RAW_UART_LICENSE_FILES = LICENSE
