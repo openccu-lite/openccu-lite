@@ -198,7 +198,7 @@ kernel_eol() { # <projected EOL of 6.18> - kernel.org's longterm table
   printf '<table><caption>Longterm release kernels</caption>\n<thead><tr><th class="head">Version</th><th>Maintainer</th><th>Released</th><th>Projected EOL</th></tr></thead>\n<tbody valign="top">\n<tr><td>6.18</td>\n<td>Greg &amp; Sasha</td>\n<td>2025-11-30</td>\n<td>%s</td>\n</tr>\n<tr><td>6.12</td>\n<td>Greg</td>\n<td>2024-11-17</td>\n<td>Dec, 2028</td>\n</tr>\n</tbody></table>\n' "$1" >"$tmp/fx/releases.html"
 }
 br_eol() { # <end of support of 2026.08> [<of the LTS 2025.02>] - buildroot.org's download table, with a commented-out row
-  printf '<tr>\n  <th>Stable</th>\n  <th>2026.08.1.x</th>\n  <td>%s</td>\n</tr>\n<!--\n<tr><th>Stable</th><th>2026.08.x</th><td>January 2020</td></tr>\n-->\n<tr><th>Old stable</th><th>2026.05.x</th><td>September 2026</td></tr>\n<tr><th>Long-term support</th><th>2025.02.x</th><td>%s</td></tr>\n' "$1" "${2:-March 2028}" >"$tmp/fx/buildroot-download.html"
+  printf '<tr>\n  <th>Stable</th>\n  <th>2026.08.1.x</th>\n  <td class="d-none d-md-table-cell">%s</td>\n</tr>\n<!--\n<tr><th>Stable</th><th>2026.08.x</th><td>January 2020</td></tr>\n-->\n<tr><th>Old stable</th><th>2026.05.x</th><td>September 2026</td></tr>\n<tr><th>Long-term support</th><th>2025.02.x</th><td>%s</td></tr>\n' "$1" "${2:-March 2028}" >"$tmp/fx/buildroot-download.html"
 }
 run() { [ "$AUTOTAG" = 1 ] && snap_tag v1.0.0; rm -rf "$tmp/sum" "$tmp/site"; python3 "$PY" --root "$tmp/root" --fixtures "$tmp/fx" --today 2026-10-24 --summary "$tmp/sum" --site "$tmp/site" >"$tmp/out" 2>&1; echo $?; }
 expect() { # <what> <exit code> <badge message> [text in the output]

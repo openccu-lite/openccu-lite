@@ -472,7 +472,8 @@ def check_buildroot(root, up):
 
 def buildroot_eol_dates(up):
     """{series: ((year, month), lts)} of buildroot.org's download table (Stable, Old stable, Long-term support:
-    "<th>Stable</th><th>2026.08.x</th><td>December 2026</td>"; the row labelled "Long-term support" is an LTS);
+    "<th>Stable</th><th>2026.08.x</th><td class=\"d-none d-md-table-cell\">December 2026</td>", the cell may carry
+    attributes; the row labelled "Long-term support" is an LTS);
     None when it cannot be read - a note, never a failed check"""
     try:
         page = up.http(BUILDROOT_DOWNLOAD, "buildroot-download.html")
@@ -481,7 +482,7 @@ def buildroot_eol_dates(up):
     page = re.sub(r"<!--.*?-->", "", page, flags=re.S)
     out = {}
     for label, ser, mon, year in re.findall(
-            r"<th>\s*([^<]*?)\s*</th>\s*<th>\s*(\d{4}\.\d{2})(?:\.\d+)*\.x\s*</th>\s*<td>\s*([A-Za-z]+)\s+(\d{4})\s*</td>",
+            r"<th>\s*([^<]*?)\s*</th>\s*<th>\s*(\d{4}\.\d{2})(?:\.\d+)*\.x\s*</th>\s*<td\b[^>]*>\s*([A-Za-z]+)\s+(\d{4})\s*</td>",
             page):
         if mon[:3].lower() in MONTHS:
             lts = bool(re.search(r"long[- ]term|\blts\b", label, re.I))
