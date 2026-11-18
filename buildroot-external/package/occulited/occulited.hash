@@ -1,5 +1,5 @@
 # Locally computed: buildroot's go-post-process output (GitHub's archive of the commit,
-# go mod vendor with Go 1.27.2, repacked by support/download/helpers mk_tar_gz; buildroot names a Go
+# go mod vendor with Go 1.27.3, repacked by support/download/helpers mk_tar_gz; buildroot names a Go
 # package's vendored archive <name>-go2.tar.gz). Bump together
 # with OCCULITED_VERSION.
-sha256  f1fe2426c06736f5c5f8aad346a8a078b54a2b0406deb6d23d5ddcf3cd980afd  occulited-a28e3d6915e01470d4b8228dcfe5344b4eff39c6-go2.tar.gz
+sha256  a84bb43f1bc3659f64b741ebe2d25d97e9fba091e5813348a6ca69a3b181f474  occulited-610193e9328c8b8bced7f92266deec6f3c04f2d0-go2.tar.gz
