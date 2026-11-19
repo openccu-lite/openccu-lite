@@ -42,7 +42,8 @@
 #                           share is refused - journald would write the network and hang with it.
 #   PERSIST=1|0             the older setting: read as persistent / ram when STORAGE is empty
 #   SYNC_INTERVAL=6h        ram-sync: how often the copy runs (lite-journal-sync)
-#   TARGET_MAX_USE=64M      ram-sync: the most the copies on the userfs may take
+#   TARGET_MAX_USE=         ram-sync: the most the copies may take; empty = 64M on the userfs and a
+#                           share, on a USB stick 1G but at most 10 % of its free space (B-352)
 #   TARGET_MAX_AGE=         ram-sync: copies older than this are removed (30d); empty = no limit
 #   RUNTIME_MAX_USE=16M     journald RuntimeMaxUse - the RAM the journal may take
 #   SYSTEM_MAX_USE=32M      journald SystemMaxUse

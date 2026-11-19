@@ -214,13 +214,33 @@ sh "$TOOL" target >/dev/null && bad "target: found a stick that is not plugged i
 printf '/dev/sdb1 /media/usb0 vfat rw 0 0\n/dev/sdb1 /mnt/x vfat rw 0 0\n' > "$T/mounts"
 sh "$TOOL" target >/dev/null && bad "target: a mount outside /media/usb1…8 counts" || ok "target: only /media/usb1…8 count"
 
+# df and du of the stick, for the default size limit there (B-352): 20 GB free, the copies 100 MB
+printf '#!/bin/sh\necho "Filesystem 1024-blocks Used Available Capacity Mounted on"\necho "/dev/sdb1 30000000 0 ${OCCU_TEST_STICK_FREE:-20000000} 0%% /media/usb2"\n' > "$T/df-stick"
+printf '#!/bin/sh\nprintf "%%s\\t%%s\\n" "${OCCU_TEST_STICK_COPIES:-102400}" "$2"\n' > "$T/du-stick"
+chmod +x "$T/df-stick" "$T/du-stick"
 stick_setup
-out=$(sh "$TOOL" copy); rc=$?
+out=$(OCCU_DF="$T/df-stick" OCCU_DU="$T/du-stick" sh "$TOOL" copy); rc=$?
 [ "$rc" -eq 0 ] && [ "$(ls "$SD/$MID" 2>/dev/null | wc -l)" -eq 3 ] && ok "a copy to the stick: three files" || bad "copy to the stick: rc=$rc $(ls -R "$T/mr") $out"
 [ -z "$(ls -A "$T/mr/media/usb1")" ] && ok "the stick with another label is not written" || bad "the other stick has: $(ls -A "$T/mr/media/usb1")"
 [ ! -e "$T/userfs" ] && ok "nothing on the userfs" || bad "the userfs was written"
 [ "$(ls "$T/run/$MID")" = system.journal ] && ok "RAM keeps only the new active file" || bad "RAM has: $(ls "$T/run/$MID")"
-grep -qx -- "-q -D $SD --vacuum-size=64M" "$T/calls" && ok "the copies on the stick are trimmed" || bad "vacuum: $(cat "$T/calls")"
+grep -qx -- "-q -D $SD --vacuum-size=1024M" "$T/calls" && ok "the copies on the stick are trimmed, by default to 1G on a large stick" || bad "vacuum: $(cat "$T/calls")"
+# B-352: the default on a stick is 1G but at most 10 % of its free space plus what the copies take;
+# the legacy 64M counts as the default, any other value is the user's
+stick_limit() {  # stick_limit <TARGET_MAX_USE line or -> <free KiB> <copies KiB> <want> <what>
+  stick_setup
+  [ "$1" = - ] || printf '%s\n' "$1" >> "$T/journal"
+  OCCU_DF="$T/df-stick" OCCU_DU="$T/du-stick" OCCU_TEST_STICK_FREE=$2 OCCU_TEST_STICK_COPIES=$3 sh "$TOOL" copy >/dev/null
+  grep -qx -- "-q -D $SD --vacuum-size=$4" "$T/calls" && ok "stick limit: $5" || bad "stick limit: $5: $(grep vacuum "$T/calls")"
+}
+stick_limit - 2000000 0 195M "10 % of a stick with 2 GB free"
+stick_limit - 1900000 100000 195M "the copies count to the base: the limit does not shrink as they grow"
+stick_limit TARGET_MAX_USE=64M 2000000 0 195M "the old default 64M moves to the new one"
+stick_limit TARGET_MAX_USE=64m 50000000 0 1024M "64m as well; at most 1G"
+stick_limit TARGET_MAX_USE=128M 50000000 0 128M "the user's value wins"
+stick_limit TARGET_MAX_USE=2G 50000000 0 2G "the user's value wins above 1G too"
+stick_limit - 5000 0 1M "a nearly full stick: at least 1M"
+OCCU_TEST_STICK_FREE=x stick_limit - x 0 64M "a free space that cannot be read: 64M"
 cmp -s "$T/state/sync.state" "$SD/.occu-sync.state" && ok "the state is also on the stick" || bad "no state beside the copies on the stick"
 case "$out" in *"copied from RAM to the USB stick LOGSTICK"*) ok "says it copied to the stick" ;; *) bad "output: $out" ;; esac
 
@@ -233,6 +253,78 @@ case "$out" in *"the USB stick LOGSTICK is not plugged in: no copy (interval)"*)
 stick_setup "ro,nosuid"
 out=$(sh "$TOOL" copy); rc=$?
 [ "$rc" -ne 0 ] && grep -qx 'LAST_RESULT=failed' "$T/state/sync.state" && grep -qx 'LAST_ERROR=the USB stick LOGSTICK is mounted read-only' "$T/state/sync.state" && [ "$(ls "$T/run/$MID" | wc -l)" -eq 3 ] && ok "a read-only stick: failed, RAM untouched" || bad "read-only stick: rc=$rc $(cat "$T/state/sync.state" 2>/dev/null)"
+
+# B-352: an archived journal file is copied up to its last object, with its arena_size to match, and
+# the copy must pass journalctl --verify, else the whole file goes. The fixture is a real journal
+# file (journal-fixture/make-fixture.sh): 400 entries, allocated to 8 MB, its last object ending at
+# 3854904. journalctl reads and verifies it where the system has one; the fake handles the rest.
+FIX="$HERE/scripts/testcases/journal-fixture/archived.journal.gz"
+REAL_JOURNALCTL=$(command -v journalctl || true)
+cat > "$T/journalctl-real" <<EOF
+#!/bin/sh
+case " \$* " in
+  *" --verify "*)
+    echo "\$*" >> "\$OCCU_TEST_LOG"
+    [ -n "\${OCCU_TEST_VERIFY_FAIL:-}" ] && exit 1
+    [ -n "$REAL_JOURNALCTL" ] || exit 0
+    exec "$REAL_JOURNALCTL" "\$@" ;;
+esac
+exec "$T/journalctl" "\$@"
+EOF
+chmod +x "$T/journalctl-real"
+trim_setup() {  # trim_setup <files>: archived fixture copies in RAM, nothing else
+  rm -rf "${T:?}/run" "${T:?}/userfs" "${T:?}/state" "${T:?}/calls"
+  mkdir -p "$T/run/$MID"
+  i=1
+  while [ "$i" -le "$1" ]; do
+    gzip -dc "$FIX" > "$T/run/$MID/system@fix-000000000000000$i-000000000000000$i.journal"
+    i=$((i + 1))
+  done
+  printf 'STORAGE=ram-sync\nTARGET_MAX_USE=128M\n' > "$T/journal"
+}
+FIXN="system@fix-0000000000000001-0000000000000001.journal"
+trim_setup 1
+gzip -dc "$FIX" > "$T/original.journal"
+out=$(OCCU_JOURNALCTL="$T/journalctl-real" sh "$TOOL" copy); rc=$?
+c="$T/userfs/$MID/$FIXN"
+[ "$rc" -eq 0 ] && [ "$(wc -c < "$c")" = 3854904 ] && ok "trimmed: the copy ends at the last object (3854904 of 8388608 bytes)" || bad "trim: rc=$rc size $(wc -c < "$c" 2>/dev/null) $out"
+[ "$(od -An -tu8 -j 96 -N 8 "$c" | tr -d ' ')" = $((3854904 - 272)) ] && ok "its arena_size matches" || bad "arena_size $(od -An -tu8 -j 96 -N 8 "$c")"
+cmp -s -n 96 "$c" "$T/original.journal" && cmp -s -i 104 -n $((3854904 - 104)) "$c" "$T/original.journal" && ok "everything else is the original's" || bad "the copy differs beyond arena_size"
+grep -q -- "--verify --file $T/userfs/$MID/.$FIXN.part" "$T/calls" && ok "the trimmed copy was verified before its rename" || bad "no verify: $(cat "$T/calls")"
+if [ -n "$REAL_JOURNALCTL" ]; then
+  "$REAL_JOURNALCTL" -q --verify --file "$c" >/dev/null 2>&1 && ok "journalctl --verify passes on the trimmed copy" || bad "journalctl --verify fails on the trimmed copy"
+  a=$("$REAL_JOURNALCTL" --file "$T/original.journal" -o export | md5sum)
+  b=$("$REAL_JOURNALCTL" --file "$c" -o export | md5sum)
+  [ "$a" = "$b" ] && [ "$("$REAL_JOURNALCTL" --file "$c" | grep -c 'B-352 fixture line')" = 400 ] && ok "its export is the original's, all 400 entries" || bad "export differs: $a / $b"
+else
+  echo "skip journalctl --verify and export of the trimmed copy: no journalctl here"
+fi
+# a trimmed copy that does not verify: the whole file, and the log says why
+trim_setup 1
+out=$(OCCU_TEST_VERIFY_FAIL=1 OCCU_JOURNALCTL="$T/journalctl-real" sh "$TOOL" copy); rc=$?
+[ "$rc" -eq 0 ] && cmp -s "$c" "$T/original.journal" && ok "a trimmed copy that fails --verify: the whole file instead" || bad "verify failure: rc=$rc size $(wc -c < "$c" 2>/dev/null)"
+case "$out" in *"did not pass journalctl --verify: copying it whole"*) ok "and says so" ;; *) bad "output: $out" ;; esac
+[ -z "$(find "$T/userfs/$MID" -name '*.part')" ] && ok "no temporary file left after the fallback" || bad "a .part is left"
+# a file journald has not archived (state 0, an offline active file) is copied whole
+trim_setup 1
+printf '\000' | dd of="$T/run/$MID/$FIXN" bs=1 seek=16 conv=notrunc 2>/dev/null
+OCCU_JOURNALCTL="$T/journalctl-real" sh "$TOOL" copy >/dev/null
+[ "$(wc -c < "$c")" = 8388608 ] && ok "a file that is not archived: copied whole" || bad "not archived: size $(wc -c < "$c")"
+# a header that does not add up (tail object beyond the arena): copied whole
+trim_setup 1
+printf '\377\377\377\000' | dd of="$T/run/$MID/$FIXN" bs=1 seek=136 conv=notrunc 2>/dev/null
+OCCU_JOURNALCTL="$T/journalctl-real" sh "$TOOL" copy >/dev/null
+[ "$(wc -c < "$c")" = 8388608 ] && ok "a header that does not add up: copied whole" || bad "bad header: size $(wc -c < "$c")"
+# N copies of a quiet journal grow the target by what the files hold, not by what journald allocated
+trim_setup 0
+n=0
+while [ "$n" -lt 5 ]; do
+  gzip -dc "$FIX" > "$T/run/$MID/system@fix-000000000000001$n-000000000000001$n.journal"
+  OCCU_JOURNALCTL="$T/journalctl-real" sh "$TOOL" copy >/dev/null
+  n=$((n + 1))
+done
+total=$(cat "$T/userfs/$MID"/system@fix-*.journal | wc -c)
+[ "$(ls "$T/userfs/$MID"/system@fix-*.journal | wc -l)" -eq 5 ] && [ "$total" -eq $((5 * 3854904)) ] && ok "5 quiet copies take 5 x the used part ($total bytes), not 5 x 8 MB" || bad "5 copies take $total bytes"
 
 # FAT: chmod and chgrp fail, the copy goes on
 stick_setup

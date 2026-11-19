@@ -30,7 +30,10 @@
 #      to <target>/<machine id>/, under a temporary name and then renamed;
 #   3. the target is synced, and only then are the copied files removed from RAM - RAM holds only
 #      what is newer than the last copy;
-#   4. the copies are trimmed to TARGET_MAX_USE (64M) and TARGET_MAX_AGE (journalctl --vacuum-*).
+#   4. the copies are trimmed to TARGET_MAX_USE and TARGET_MAX_AGE (journalctl --vacuum-*); an
+#      empty TARGET_MAX_USE is 64M on the userfs and a share, and on a stick 1G, at most 10 % of its
+#      free space (target_max_use, B-352).
+# Step 2 copies each file only up to its last object (copy_journal_file, B-352).
 #
 # The USB stick (TARGET=usb:<label>/<directory>, e.g. usb:LOGSTICK/journal). The stick is named by
 # its filesystem label - udev's ID_FS_LABEL, the label with spaces and odd characters made "_" -
@@ -348,6 +351,85 @@ lock_copy() {
   return 0
 }
 
+# target_max_use: the size the copies are trimmed to. TARGET_MAX_USE when the file sets one; on a
+# USB stick an empty one - and 64M, the default until B-352, which an install that never changed it
+# carries - is 1G, but never more than 10 % of the stick's free space (what df leaves, plus what the
+# copies already take, so the limit does not shrink as they grow); 64M on the userfs and on a
+# network share, and on a stick whose space cannot be read.
+STICK_MAX_KIB=1048576
+target_max_use() {
+  v=$(echo "${TARGET_MAX_USE}" | tr 'm' 'M')
+  if [ -n "${STICK_LABEL}" ] && { [ -z "$v" ] || [ "$v" = 64M ]; }; then
+    free=$("${DF}" -kP "${DST}" 2>/dev/null | awk 'NR == 2 { print $4 }')
+    copies_kib=$("${DU}" -sk "${DST}" 2>/dev/null | awk 'NR == 1 { print $1 }')
+    case "${free}" in ''|*[!0-9]*) free="" ;; esac
+    case "${copies_kib}" in ''|*[!0-9]*) copies_kib=0 ;; esac
+    if [ -n "${free}" ]; then
+      l=$(( (free + copies_kib) / 10 ))
+      [ "$l" -gt "${STICK_MAX_KIB}" ] && l=${STICK_MAX_KIB}
+      [ "$l" -lt 1024 ] && l=1024
+      echo "$((l / 1024))M"
+      return
+    fi
+  fi
+  echo "${TARGET_MAX_USE:-64M}"
+}
+
+# journal_used_end <file>: where an archived journal file's last object ends (8-byte aligned), when
+# that is before the file's end; exit 1 for anything else (not a journal file, not archived, a header
+# that does not add up), which is then copied whole. The header's fields are little-endian, as
+# every product's CPU is: header_size and arena_size at 88 and 96, tail_object_offset at 136; an
+# object's size is the 8 bytes after its first 8; the state byte at 16 is 2 for an archived file.
+journal_used_end() {
+  [ "$(head -c 8 "$1" 2>/dev/null)" = LPKSHHRH ] || return 1
+  [ "$(od -An -tu1 -j 16 -N 1 "$1" 2>/dev/null | tr -d ' ')" = 2 ] || return 1
+  # shellcheck disable=SC2046 # three numbers
+  set -- "$1" $(od -An -tu8 -j 88 -N 16 "$1" 2>/dev/null) $(od -An -tu8 -j 136 -N 8 "$1" 2>/dev/null)
+  [ "$#" = 4 ] || return 1
+  hs=$2 arena=$3 tail=$4
+  tsize=$(od -An -tu8 -j $((tail + 8)) -N 8 "$1" 2>/dev/null | tr -d ' ')
+  for n in "${hs}" "${arena}" "${tail}" "${tsize}"; do
+    case "$n" in ''|*[!0-9]*) return 1 ;; esac
+  done
+  fsize=$(wc -c < "$1")
+  end=$(( (tail + tsize + 7) / 8 * 8 ))
+  [ "${hs}" -gt 0 ] && [ "${tail}" -ge "${hs}" ] && [ "${tsize}" -gt 0 ] && [ "${end}" -le $((hs + arena)) ] &&
+    [ $((hs + arena)) -le "${fsize}" ] && [ "${end}" -lt "${fsize}" ] || return 1
+  echo "${end} ${hs}"
+}
+
+# copy_journal_file <archived file> <to>: the file up to its last object, its arena_size set to
+# match (B-352). journald gives every file its whole size up front - 2 MB at the image's
+# RuntimeMaxUse of 16M - and leaves the unused tail of an archived one as holes in RAM; a copy with
+# cp wrote those holes out in full on a stick (FAT has no sparse files), so each copy's rotation
+# cost 2 MB however little it held, and 64M covered about three days. The trimmed file is what
+# journald itself would read (journalctl's export of both is the same); every trimmed copy must
+# pass journalctl --verify, and one that does not - like a file that is not an archived journal
+# file, or one whose header does not add up - is copied whole.
+copy_journal_file() {
+  if used=$(journal_used_end "$1"); then
+    end=${used% *} n=$((${used% *} - ${used#* }))
+    bytes="" i=0
+    while [ "$i" -lt 8 ]; do
+      bytes="${bytes}\\$(printf %o $(( (n >> (8 * i)) & 255 )))"
+      i=$((i + 1))
+    done
+    # shellcheck disable=SC2059 # the escapes are the point
+    if head -c "${end}" "$1" > "$2" 2>/dev/null && [ "$(wc -c < "$2")" = "${end}" ] &&
+      printf "${bytes}" | dd of="$2" bs=1 seek=96 conv=notrunc 2>/dev/null; then
+      # never a broken file on the target: journald's own check of every object, else the whole file
+      if "${JOURNALCTL}" -q --verify --file "$2" >/dev/null 2>&1; then
+        return 0
+      fi
+      echo "journal: the trimmed copy of ${1##*/} did not pass journalctl --verify: copying it whole"
+    else
+      echo "journal: trimming the copy of ${1##*/} failed: copying it whole"
+    fi
+    rm -f "$2"
+  fi
+  cp "$1" "$2" 2>/dev/null
+}
+
 copy() {  # [interval|early|manual|stop|plug|unplug]
   reason=${1:-manual}
   mkdir -p "${STATE_DIR}" || return 1
@@ -422,14 +504,15 @@ copy_locked() {  # the copy itself, with ${reason}
       fi
       chgrp systemd-journal "${to}" 2>/dev/null
       chmod 2755 "${to}" 2>/dev/null
-      if [ -f "${to}/${name}" ] && [ "$(wc -c < "$f")" = "$(wc -c < "${to}/${name}")" ]; then
-        # copied before, and left in RAM by a copy that stopped before its end
+      if [ -f "${to}/${name}" ]; then
+        # copied before (a copy only ever appears under its name by the rename below), and left in
+        # RAM by a copy that stopped before its end
         echo "$f" >> "${list}"
         continue
       fi
       tmp="${to}/.${name}.part"
       # chmod and chgrp fail on FAT, exFAT and NTFS, whose mount gives every file its owner and mode
-      if cp "$f" "${tmp}" 2>/dev/null && { chmod 0640 "${tmp}" 2>/dev/null; mv -f "${tmp}" "${to}/${name}"; }; then
+      if copy_journal_file "$f" "${tmp}" && { chmod 0640 "${tmp}" 2>/dev/null; mv -f "${tmp}" "${to}/${name}"; }; then
         chgrp systemd-journal "${to}/${name}" 2>/dev/null
         echo "$f" >> "${list}"
         copied=$((copied + 1))
@@ -442,7 +525,7 @@ copy_locked() {  # the copy itself, with ${reason}
     # on the card or the stick before it leaves RAM
     sync
     while IFS= read -r f; do rm -f "$f"; done < "${list}"
-    set -- "--vacuum-size=${TARGET_MAX_USE:-64M}"
+    set -- "--vacuum-size=$(target_max_use)"
     [ -n "${TARGET_MAX_AGE}" ] && set -- "$@" "--vacuum-time=${TARGET_MAX_AGE}"
     if ! "${JOURNALCTL}" -q -D "${DST}" "$@" >/dev/null 2>&1; then
       [ -n "${err}" ] || err="trimming the copies on ${DST_NAME} failed"
