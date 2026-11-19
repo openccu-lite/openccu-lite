@@ -31,4 +31,19 @@ define JAVA_AZUL_INSTALL_TARGET_CMDS
 	ln -s java-azul $(TARGET_DIR)/opt/java
 endef
 
+# B-353: target-finalize strips every executable and then patches its RUNPATH (fix-rpath target)
+# on each build of the tree, and an incremental build does not reinstall this package. So a warm
+# round stripped the JRE the previous round had already patched; strip re-lays a patched file (the
+# segment patchelf added), and the patch then grew it again: 40 files under /opt/java-azul changed
+# without a JRE update (bin/java 132,128 -> 134,128 bytes). The archive's files are put back first on
+# every build, so strip and patchelf always start from them, and an unchanged JRE gives the same
+# files as a fresh build. The hooks run before the strip and the RPATH step, in target-finalize's
+# rule, where $(@D) is not the package's directory: JAVA_AZUL_DIR is.
+define JAVA_AZUL_RESTORE_ARCHIVE_FILES
+	for d in bin conf lib legal DISCLAIMER; do \
+		cp -af $(JAVA_AZUL_DIR)/$$d $(TARGET_DIR)/opt/java-azul/ || exit 1; \
+	done
+endef
+JAVA_AZUL_TARGET_FINALIZE_HOOKS += JAVA_AZUL_RESTORE_ARCHIVE_FILES
+
 $(eval $(generic-package))

@@ -131,6 +131,7 @@ jobs:
         run: |
           sh scripts/testcases/lite-unit-order-test.sh
           sh scripts/testcases/lite-hb-rf-eth-session-test.sh
+          sh scripts/testcases/lite-java-azul-finalize-test.sh
           sh scripts/testcases/lite-network-reload-test.sh
           sh scripts/testcases/lite-default-hostname-test.sh
           sh scripts/testcases/lite-backup-version-test.sh
