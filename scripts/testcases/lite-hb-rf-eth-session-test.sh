@@ -66,7 +66,15 @@ echo "1150.0 0.0" >"$T/uptime"; run
 # the units
 grep -q '^ConditionPathExists=/sys/class/hb-rf-eth/hb-rf-eth/session_lost$' "$U/occu-hb-rf-eth-session.service" && ok "skipped without the driver" || bad "the service's condition"
 grep -q '^OnUnitInactiveSec=30$' "$U/occu-hb-rf-eth-session.timer" && ok "the timer's period" || bad "the timer's period"
-grep -q '^enable occu-hb-rf-eth-session.timer$' "$U/../system-preset/50-openccu-lite.preset" && ok "the timer is enabled by the preset" || bad "the preset"
+# B-351: the timer runs only while the driver's device is there, so a system without an HB-RF-ETH
+# gets no "skipped, unmet condition" journal line every 30 s
+R="$HERE/buildroot-external/overlay/lite/usr/lib/udev/rules.d/61-openccu-lite-radio-hotplug.rules"
+! grep -q 'occu-hb-rf-eth-session' "$U/../system-preset/50-openccu-lite.preset" && ok "the preset does not enable the timer" || bad "the preset names the timer"
+! grep -q '^\[Install\]' "$U/occu-hb-rf-eth-session.timer" && ok "the timer has no [Install]: nothing enables it for every system" || bad "the timer has an [Install] section"
+grep -q '^ConditionPathExists=/sys/class/hb-rf-eth/hb-rf-eth$' "$U/occu-hb-rf-eth-session.timer" && ok "a timer started by hand without the driver is skipped" || bad "the timer's condition"
+grep -q '^SUBSYSTEM=="hb-rf-eth", KERNEL=="hb-rf-eth", ACTION=="add", RUN+="/bin/systemctl --no-block start occu-hb-rf-eth-session.timer"$' "$R" && ok "udev starts the timer when the driver's device appears" || bad "no udev start of the timer"
+grep -q '^SUBSYSTEM=="hb-rf-eth", KERNEL=="hb-rf-eth", ACTION=="remove", RUN+="/bin/systemctl --no-block stop occu-hb-rf-eth-session.timer"$' "$R" && ok "udev stops the timer when the driver goes" || bad "no udev stop of the timer"
+[ "$(grep -c 'occu-hb-rf-eth-session' "$R")" = 2 ] && ok "nothing else in the rules starts the timer" || bad "the rules name the timer $(grep -c 'occu-hb-rf-eth-session' "$R") times"
 [ -x "$SCRIPT" ] && ok "the script is executable" || bad "the script's mode"
 
 [ "$fails" = 0 ] && { echo "all ok"; exit 0; }

@@ -10,3 +10,8 @@ SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{PRODUCT}=="1b1f/c00f/*", ACTIO
 # connection_state 0) until it is closed, so there is no raw-uart remove event: any USB device that
 # goes starts the unit too (the rescan probes nothing it already knows, so it is cheap).
 SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ACTION=="remove", RUN+="/bin/systemctl --no-block start occu-radio-hotplug.service"
+# The hb_rf_eth driver's device appears when occu-init-rf-hardware loads the driver for a configured
+# HB-RF-ETH (at boot, or when one is set up later) and goes when it unloads it: the session check's
+# timer runs only while it is there.
+SUBSYSTEM=="hb-rf-eth", KERNEL=="hb-rf-eth", ACTION=="add", RUN+="/bin/systemctl --no-block start occu-hb-rf-eth-session.timer"
+SUBSYSTEM=="hb-rf-eth", KERNEL=="hb-rf-eth", ACTION=="remove", RUN+="/bin/systemctl --no-block stop occu-hb-rf-eth-session.timer"

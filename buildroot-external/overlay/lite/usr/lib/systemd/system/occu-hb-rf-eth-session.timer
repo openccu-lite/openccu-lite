@@ -1,17 +1,22 @@
 # openccu-lite: looks for a lost HB-RF-ETH session every 30 s (see the service). A timer, not a path
 # unit: inotify does not see a sysfs attribute change, and the driver's sysfs_notify() wakes only a
-# poll(). The service is skipped by its condition where the driver is not loaded.
-# Timers are wanted by multi-user.target and carry no default dependencies (occu-interface-clock.timer).
+# poll().
+#
+# Started and stopped by udev (61-openccu-lite-radio-hotplug.rules) when the hb_rf_eth driver's
+# device comes and goes, so it runs only on a system with an HB-RF-ETH - the driver is loaded by
+# occu-init-rf-hardware.service where /etc/config/hb_rf_eth names one, at boot or when a gateway is
+# set up later. Enabled for every system, the timer started the service every 30 s and systemd
+# logged its skipped condition each time, 2880 journal lines a day on a system without one.
+# No [Install]: the preset does not enable it. The condition keeps a start by hand a no-op.
+# No default dependencies, like occu-interface-clock.timer.
 [Unit]
 DefaultDependencies=no
 Conflicts=shutdown.target
 Before=shutdown.target
 Description=HB-RF-ETH session check (every 30 s)
+ConditionPathExists=/sys/class/hb-rf-eth/hb-rf-eth
 
 [Timer]
 OnActiveSec=60
 OnUnitInactiveSec=30
 AccuracySec=5
-
-[Install]
-WantedBy=multi-user.target
