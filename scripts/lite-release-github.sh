@@ -26,7 +26,7 @@
 # curl, python3, sha256sum. --dry-run does every local check and the read-only GitHub checks, and
 # writes nothing to GitHub.
 #
-# Environment (defaults for the build host): TREE (/ssd/build/openccu-lite-3899), PRODUCTS
+# Environment (defaults for the build host): TREE (see below; TREE_ROOT /ssd/build), PRODUCTS
 # ("aarch64-rpi3 aarch64-rpi4 x86_64-ova"), GH_REPO (openccu-lite/openccu-lite), GH_API
 # (https://api.github.com), GH_UPLOADS (https://uploads.github.com), STAGE (a new temporary
 # directory, removed on exit; a STAGE given is kept).
@@ -37,7 +37,18 @@ if [ "${1:-}" = --dry-run ]; then dry=1; shift; fi
 [ $# -eq 2 ] || { echo "usage: $0 [--dry-run] <version> <commit>" >&2; exit 2; }
 V="$1"
 SHA="$2"
-TREE="${TREE:-/ssd/build/openccu-lite-3899}"
+# the build tree: TREE when given; else a patch release X.Y.Z (no prerelease part) whose commit is the
+# head of the hotfix line's own tree TREE_ROOT/openccu-lite-hotfix-X.Y (a checkout of hotfix-X.Y,
+# kept until the next minor release) is released from that tree; everything else from the main
+# line's warm tree TREE_ROOT/openccu-lite-3899
+TREE_ROOT="${TREE_ROOT:-/ssd/build}"
+if [ -z "${TREE:-}" ]; then
+  TREE="$TREE_ROOT/openccu-lite-3899"
+  if [[ "$V" =~ ^([0-9]+\.[0-9]+)\.[0-9]+$ ]]; then
+    ht="$TREE_ROOT/openccu-lite-hotfix-${BASH_REMATCH[1]}"
+    if [ -d "$ht/.git" ] && [ "$(git -C "$ht" rev-parse HEAD 2>/dev/null)" = "$SHA" ]; then TREE="$ht"; fi
+  fi
+fi
 PRODUCTS="${PRODUCTS:-aarch64-rpi3 aarch64-rpi4 x86_64-ova}"
 GH_REPO="${GH_REPO:-openccu-lite/openccu-lite}"
 GH_API="${GH_API:-https://api.github.com}"
@@ -73,6 +84,7 @@ PIN=$(git show "$SHA:buildroot-external/package/occulited/occulited.mk" | sed -n
 # names the occulited of this image and is checked on GitHub below
 OVER="$PIN"
 say "release $TAG from $SHA (base $BASE, occulited $PIN, prerelease $PRE), products: $PRODUCTS"
+say "build tree: $TREE"
 
 # ---- the round in the warm tree is this commit and this version --------------------------------
 [ -d "$TREE/.git" ] || fail "$TREE is not the build tree"

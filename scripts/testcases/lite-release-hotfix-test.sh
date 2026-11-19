@@ -7,7 +7,9 @@
 #   - 1.2.2 only in hotfix-1.2: ok ("a hotfix release");
 #   - 1.2.2 in neither: rc 1;
 #   - 1.3.0-beta.0 only in hotfix-1.3: rc 1 (a prerelease is never a hotfix);
-#   - 1.2.2 only in hotfix-1.3: rc 1 (the branch is the version's own).
+#   - 1.2.2 only in hotfix-1.3: rc 1 (the branch is the version's own);
+#   - without TREE: 1.2.2 is released from TREE_ROOT/openccu-lite-hotfix-1.2 when that tree's head is the
+#     commit, from TREE_ROOT/openccu-lite-3899 when it is not; a prerelease always from openccu-lite-3899.
 #
 # Usage: sh scripts/testcases/lite-release-hotfix-test.sh    (from the fork's checkout)
 set -u
@@ -100,6 +102,29 @@ run 1.2.2 hotfix-1.3
 mkrepo 1.3.0-beta 1.3.0-beta.0
 run 1.3.0-beta.0 hotfix-1.3
 [ "$rc" = 1 ] && printf '%s\n' "$out" | grep -q "GitHub's main do not contain" && ok "a prerelease is never a hotfix" || bad "1.3.0-beta.0 in hotfix-1.3: rc $rc: $out"
+
+# the tree by version and branch, without TREE
+runroot() { # version branches...: as run, TREE unset, TREE_ROOT=$T/root
+  v="$1"; shift
+  printf '%s\n' "$@" >"$T/branches"
+  out=$(cd "$T/repo" && env -u STAGE -u TREE TREE_ROOT="$T/root" PRODUCTS="$P" GH_API="$API" GH_TOKEN=test \
+    bash "$S" --dry-run "$v" "$SHA" 2>&1)
+  rc=$?
+}
+mkrepo 1.2.2
+rm -rf "$T/root"; mkdir -p "$T/root"; mv "$T/tree" "$T/root/openccu-lite-hotfix-1.2"
+runroot 1.2.2 hotfix-1.2
+[ "$rc" = 0 ] && printf '%s\n' "$out" | grep -q "build tree: $T/root/openccu-lite-hotfix-1.2\$" \
+  && ok "1.2.2 from the hotfix line's tree" || bad "1.2.2 hotfix tree: rc $rc: $out"
+g -C "$T/repo" commit -q --allow-empty -m other; SHA=$(git -C "$T/repo" rev-parse HEAD)
+runroot 1.2.2 hotfix-1.2
+printf '%s\n' "$out" | grep -q "build tree: $T/root/openccu-lite-3899\$" && [ "$rc" = 1 ] \
+  && ok "a hotfix tree on another commit is not taken" || bad "hotfix tree on another commit: rc $rc: $out"
+mkrepo 1.3.0-beta 1.3.0-beta.0
+rm -rf "$T/root"; mkdir -p "$T/root"; cp -a "$T/tree" "$T/root/openccu-lite-hotfix-1.3"; mv "$T/tree" "$T/root/openccu-lite-3899"
+runroot 1.3.0-beta.0 main
+[ "$rc" = 0 ] && printf '%s\n' "$out" | grep -q "build tree: $T/root/openccu-lite-3899\$" \
+  && ok "a prerelease from the main line's tree" || bad "prerelease tree: rc $rc: $out"
 
 [ "$fails" = 0 ] && echo "all ok" || echo "$fails failed"
 [ "$fails" = 0 ]
