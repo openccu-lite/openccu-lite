@@ -638,6 +638,19 @@ if [ "$SYSTEMD" = 1 ] && [ "$FAILED" = 0 ]; then
   # run - that is the verdict the catalogue's flags rest on. LITE_QEMU_ADDONS="" skips the phase,
   # LITE_QEMU_ADDONS="mosquitto" narrows it. The synthetic litetest addon above stays the control.
   ADDONS=${LITE_QEMU_ADDONS-mosquitto hm2mqtt hmm redmatic}
+  # the first account's name and password; relogin uses them again
+  QU=litetest QP=lite-qemu-test-2026
+  # B-354: a new session for the account. A wait for GitHub's quota can take the hour its reset is
+  # away, and the session from the setup idles out meanwhile: beta.9's first run then had its install
+  # refused with 401. So the run logs in again after such a wait, and once when the API answers 401.
+  relogin() {
+    curl -s --max-time 10 -X POST -H 'Content-Type: application/json' -d "{\"username\":\"$QU\",\"password\":\"$QP\"}" "$BASE/api/auth/v1/login" >"$WORK/login.json"
+    rl_sid=$(sed -n 's/.*"sid":"\([^"]*\)".*/\1/p' "$WORK/login.json")
+    if [ -z "$rl_sid" ]; then fail "no session from a new login ($1): $(cat "$WORK/login.json")"; return 1; fi
+    SID=$rl_sid
+    AUTH="Authorization: Bearer $SID"
+    say "addons: logged in again ($1)"
+  }
   if [ -n "$ADDONS" ] && [ "$FAILED" = 0 ]; then
     BASE="http://127.0.0.1:$PORT"
     # task 310: the refresh asks GitHub twice per catalogue entry (the stars, the releases), the
@@ -648,7 +661,7 @@ if [ "$SYSTEMD" = 1 ] && [ "$FAILED" = 0 ]; then
   fi
   if [ -n "$ADDONS" ] && [ "$FAILED" = 0 ]; then
     say "addons: the first account and a session"
-    curl -s --max-time 10 -X POST -H 'Content-Type: application/json' -d '{"username":"litetest","password":"lite-qemu-test-2026"}' "$BASE/api/auth/v1/setup" >"$WORK/setup.json"
+    curl -s --max-time 10 -X POST -H 'Content-Type: application/json' -d "{\"username\":\"$QU\",\"password\":\"$QP\"}" "$BASE/api/auth/v1/setup" >"$WORK/setup.json"
     SID=$(sed -n 's/.*"sid":"\([^"]*\)".*/\1/p' "$WORK/setup.json")
     [ -n "$SID" ] || fail "no session from the first account's setup: $(cat "$WORK/setup.json")"
     AUTH="Authorization: Bearer $SID"
@@ -670,7 +683,7 @@ if [ "$SYSTEMD" = 1 ] && [ "$FAILED" = 0 ]; then
       # task 376: an install GitHub's quota refuses ("GitHub rate limit, try again in N min") waits
       # for the reset (github_budget, the same cap) and is tried once more; refused again, or with
       # the reset too far, it is the environment's failure, not the image's
-      try=1
+      try=1 relogged=""
       while :; do
         say "addons: installing $id from the catalogue${try#1}"
         T0=$(date +%s)
@@ -689,10 +702,16 @@ if [ "$SYSTEMD" = 1 ] && [ "$FAILED" = 0 ]; then
         else
           WHY="not accepted ($code): $(cat "$WORK/install.json")"
         fi
+        # a session that idled out: log in again and try once more
+        if [ "$code" = 401 ] && [ -z "$relogged" ]; then
+          relogged=1
+          relogin "the install of $id answered 401" && continue
+          break
+        fi
         if ! is_quota "$WHY"; then break; fi
         QUOTA_MET=1
         if [ "$try" = 1 ]; then
-          R=$(github_budget "${LITE_QEMU_GITHUB_NEED:-30}" "${LITE_QEMU_GITHUB_WAIT:-3900}") && { say "addons: GitHub's quota refused $id; $R - once more"; try=2; continue; }
+          R=$(github_budget "${LITE_QEMU_GITHUB_NEED:-30}" "${LITE_QEMU_GITHUB_WAIT:-3900}") && { say "addons: GitHub's quota refused $id; $R - once more"; try=2; relogin "after the wait for GitHub's quota" || break; continue; }
           say "addons: GitHub's quota refused $id: $R"
         fi
         break

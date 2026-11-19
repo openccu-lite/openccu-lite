@@ -26,7 +26,7 @@ eval "$(grep '^is_quota() {' "$S")"
 is_quota '{"phase":"failed","error":"GitHub rate limit, try again in 42 min: the release list of rdmtc/RedMatic cannot be read now"}' && ok "the install's quota refusal is the environment" || bad "quota refusal not recognised"
 is_quota '{"phase":"failed","error":"checksum mismatch"}' && bad "an image failure taken for the quota" || ok "another install failure is the image's"
 grep -q 'exit 3; fi' "$S" && ok "only the quota failed: exit 3" || bad "no exit 3 for a quota-only failure"
-grep -q 'once more"; try=2; continue' "$S" && ok "a quota refusal is tried once more after the reset" || bad "no retry after the reset"
+grep -q 'once more"; try=2; relogin "after the wait for GitHub'"'"'s quota" || break; continue' "$S" && ok "a quota refusal is tried once more after the reset, with a new login (B-354)" || bad "no retry with a new login after the reset"
 
 echo "failures: $fails"; exit 1; }
 
@@ -83,6 +83,33 @@ grep -q 'R=$(github_budget "${LITE_QEMU_GITHUB_NEED:-[2-9][0-9]}" "${LITE_QEMU_G
   && ok "the addon e2e checks the budget first (20 calls or more)" || bad "the addon e2e does not call github_budget with a need of 20 or more"
 awk '/github_budget "\$\{LITE_QEMU_GITHUB_NEED/ && !b {b=NR} /catalog\/refresh/ && !r {r=NR} END {exit !(b && r && b < r)}' "$S" \
   && ok "before the catalogue refresh" || bad "github_budget is not called before the catalogue refresh"
+
+# B-354: the session from the setup idles out during a wait for the quota's reset (beta.9's first run:
+# the install refused with 401); relogin logs in with the setup's account and takes the new session
+grep -q '^  relogin() {$' "$S" && ok "relogin found in lite-qemu-test.sh" || bad "relogin() not found in lite-qemu-test.sh"
+awk '/^  relogin\(\) \{$/ {p=1} p {print} p && /^  \}$/ {p=0}' "$S" >"$T/relogin.sh"
+mkdir -p "$T/bin-login"
+cat >"$T/bin-login/curl" <<EOS
+#!/bin/sh
+echo "\$*" >>"$T/login-calls"
+cat "$T/login-answer"
+EOS
+chmod +x "$T/bin-login/curl"
+relog() { # <answer>: $out, $rc, the SID and AUTH after it
+  printf '%s' "$1" >"$T/login-answer"; rm -f "$T/login-calls"
+  out=$(PATH="$T/bin-login:$PATH" sh -c "WORK='$T' BASE=http://127.0.0.1:1 QU=litetest QP=pw SID=old AUTH='Authorization: Bearer old'
+    say() { echo \"say \$*\"; }; fail() { echo \"fail \$*\"; }; . '$T/relogin.sh'; relogin why; rc=\$?; echo \"SID=\$SID\"; echo \"AUTH=\$AUTH\"; exit \$rc")
+  rc=$?
+}
+relog '{"sid":"s3cr3t","user":"litetest","role":"admin"}'
+[ "$rc" = 0 ] && echo "$out" | grep -qx 'SID=s3cr3t' && echo "$out" | grep -qx 'AUTH=Authorization: Bearer s3cr3t' && ok "relogin takes the new session" || bad "relogin: rc $rc $out"
+grep -q -- '/api/auth/v1/login' "$T/login-calls" && grep -q -- '"username":"litetest","password":"pw"' "$T/login-calls" && ok "with the setup's account at the login" || bad "login call: $(cat "$T/login-calls")"
+relog '{"error":"invalid credentials"}'
+[ "$rc" != 0 ] && echo "$out" | grep -q '^fail no session from a new login (why)' && echo "$out" | grep -qx 'SID=old' && ok "a refused login fails the run and keeps nothing new" || bad "refused login: rc $rc $out"
+# an install that answers 401 logs in again, once
+grep -q 'if \[ "$code" = 401 \] && \[ -z "$relogged" \]; then' "$S" && grep -q 'relogin "the install of $id answered 401" && continue' "$S" \
+  && ok "an install answering 401 logs in again and tries once more" || bad "no new login on a 401 from the install"
+grep -q 'AUTH="Authorization: Bearer $SID"' "$T/relogin.sh" && ok "relogin sets the header the calls use" || bad "relogin does not set AUTH"
 
 echo "failures: $fails"
 [ "$fails" = 0 ]
