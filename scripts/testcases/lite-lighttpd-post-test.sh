@@ -144,6 +144,11 @@ class H(http.server.BaseHTTPRequestHandler):
 http.server.ThreadingHTTPServer(("127.0.0.1", 9000), H).serve_forever()
 PY
 python3 /tmp/backend.py & BPID=$!
+# B-349: lighttpd is hit only once the backend listens (under load on the CI runner it was not yet,
+# and a check got lighttpd's 503 instead of the backend's answer)
+i=0; until curl -s -o /dev/null --max-time 1 http://127.0.0.1:9000/ready; do
+  i=$((i+1)); [ $i -ge 300 ] && { echo "FAIL the backend on :9000 did not listen within 30 s"; exit 1; }; sleep 0.1
+done
 mkdir -p /srv
 cat > /tmp/l.conf <<CONF
 server.document-root = "/srv"
@@ -158,7 +163,9 @@ CONF
 mkdir -p /tmp/lighttpd-upload
 run() {  # start the built lighttpd
   ./b/src/lighttpd -D -f /tmp/l.conf -m "$PWD/b/src" & LPID=$!
-  i=0; until curl -s -o /dev/null http://127.0.0.1:8080/ || [ $i -ge 50 ]; do sleep 0.1; i=$((i+1)); done
+  i=0; until curl -s -o /dev/null --max-time 1 http://127.0.0.1:8080/; do
+    i=$((i+1)); [ $i -ge 300 ] && { echo "FAIL the built lighttpd did not listen within 30 s"; exit 1; }; sleep 0.1
+  done
 }
 stop() { kill $LPID; wait $LPID 2>/dev/null; }
 U=http://127.0.0.1:8080/x

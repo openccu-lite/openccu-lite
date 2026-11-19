@@ -480,6 +480,11 @@ print("closed none")
 EOF
 python3 /tmp/echo.py &
 ECHO_PID=$!
+# B-349: nothing reaches lighttpd before the backend listens - under load on the CI runner the
+# session-gate checks went out first and all got lighttpd's 503
+i=0; until curl -s -o /dev/null --max-time 1 http://127.0.0.1:2122/ready; do
+  i=$((i+1)); [ $i -ge 300 ] && { echo "FAIL the echo backend on :2122 did not listen within 30 s"; exit 1; }; sleep 0.1
+done
 : >/tmp/echo.log
 # the addon's drop-in: its frontend under /addons/ like RedMatic's and homematic-manager's, a path
 # outside /addons/ like RedMatic's Amazon Echo hub (no gate there), and a socket of its own

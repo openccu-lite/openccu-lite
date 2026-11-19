@@ -85,7 +85,10 @@ cp -a /src/www-platform/. /www/ && cp -a /src/www-lite/. /www/
 lighttpd -tt -f /etc/lighttpd/lighttpd.conf >/tmp/tt.log 2>&1 && ok "lighttpd -tt parses the recovery's configuration" || { cat /tmp/tt.log; bad "lighttpd -tt"; }
 lighttpd -D -f /etc/lighttpd/lighttpd.conf >/tmp/run.log 2>&1 &
 pid=$!
-i=0; until curl -s -o /dev/null http://127.0.0.1/ || [ $i -ge 50 ]; do i=$((i+1)); sleep 0.1; done
+# B-349: a lighttpd that does not listen fails here, not as a wrong answer further down
+i=0; until curl -s -o /dev/null --max-time 1 http://127.0.0.1/; do
+  i=$((i+1)); [ $i -ge 300 ] && { cat /tmp/run.log; echo "FAIL lighttpd did not listen within 30 s"; exit 1; }; sleep 0.1
+done
 H=/tmp/h; B=/tmp/b
 req() { rm -f $H $B; curl -s -D $H -o $B "$@" >/dev/null; sed -n '1s/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p' $H; }
 hdr() { sed -n "s/^$1: *\(.*\)\r\$/\1/Ip" $H | head -1; }
