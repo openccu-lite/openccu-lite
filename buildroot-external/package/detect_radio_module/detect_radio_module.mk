@@ -11,7 +11,7 @@
 #
 ################################################################################
 
-DETECT_RADIO_MODULE_VERSION = v2.0.0-beta.8
+DETECT_RADIO_MODULE_VERSION = v2.0.0-beta.9
 DETECT_RADIO_MODULE_SITE = $(call github,openccu-lite,piVCCU,$(DETECT_RADIO_MODULE_VERSION))
 DETECT_RADIO_MODULE_LICENSE = Apache-2.0
 DETECT_RADIO_MODULE_LICENSE_FILES = LICENSE
