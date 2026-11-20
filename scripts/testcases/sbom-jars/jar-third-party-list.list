@@ -1,0 +1,13 @@
+META-INF/
+META-INF/MANIFEST.MF	Manifest-Version: 1.0\nMain-Class: example.Main\n
+THIRD-PARTY.txt	\nLists of 2 third-party dependencies.\n     (The Apache Software License, Version 2.0) Netty/Common (io.netty:netty-common:4.2.5.Final - https://netty.io/netty-common/)\n     (Bouncy Castle Licence) Bouncy Castle Provider (org.bouncycastle:bcprov-jdk18on:1.82 - https://www.bouncycastle.org/download/bouncy-castle-java/)\n
+licenses/
+licenses/apache software license, version 2.0 - license-2.0.txt	Apache License\nVersion 2.0, January 2004\n
+META-INF/maven/de.eq3.example/server/pom.properties	groupId=de.eq3.example\nartifactId=server\nversion=1.4.0\n
+META-INF/maven/io.netty/netty-common/pom.properties	artifactId=netty-common\ngroupId=io.netty\nversion=4.2.5.Final\n
+META-INF/maven/org.jctools/jctools-core/pom.properties	artifactId=jctools-core\ngroupId=org.jctools\nversion=4.0.5\n
+META-INF/maven/org.jctools/jctools-core/pom.xml	<project xmlns="http://maven.apache.org/POM/4.0.0"><artifactId>jctools-core</artifactId><name>Java Concurrency Tools Core Library</name><licenses><license><name>Apache License, Version 2.0</name></license></licenses></project>
+example/Main.class
+io/netty/util/Version.class
+org/bouncycastle/LICENSE.class
+org/jctools/queues/MpscArrayQueue.class

@@ -12,7 +12,8 @@ What becomes a component:
   directory;
 - OpenCCU-Base split into what reaches the image (build/packages-file-list.txt against the target
   tree): each program and library, the four JARs with the libraries each bundles (their
-  *-JARLICENSEINFO.txt, nested under the JAR), the firmware, the device descriptions and the
+  *-JARLICENSEINFO.txt, and the Maven metadata each JAR keeps of them: META-INF/maven/*/*/
+  pom.properties; nested under the JAR), the firmware, the device descriptions and the
   configuration files - HMSL-2.0 unless licenses/licenses.md says otherwise;
 - occulited with the Go modules it links (vendor/modules.txt, each module's LICENSE; checked against
   `go version -m` when the host Go is there) and the npm packages its UI bundle ships
@@ -26,7 +27,7 @@ comes from.
 
 --check fails (exit 1) on a component without a licence or with `unknown`, a target package without
 a component, a Go module without a licence file or linked but not vendored, a JAR library line that
-could not be read - unless the exceptions file names it, with a reason. No network, no module
+could not be read, a JAR with no library found - unless the exceptions file names it, with a reason. No network, no module
 outside Python's standard library.
 """
 import copy
@@ -40,6 +41,8 @@ import re
 import subprocess
 import sys
 import uuid
+import xml.etree.ElementTree as ET
+import zipfile
 from datetime import datetime, timezone
 from urllib.parse import quote
 
@@ -435,6 +438,39 @@ PAREN = r"\([^()]*(?:\([^()]*\)[^()]*)*\)"
 JAR_LINE = re.compile(r"^\s*((?:" + PAREN + r"\s*)+)(.*?)\s*\(([^:()\s]+):([^:()\s]+):([^\s()]+)\s+-\s+([^()\s]*)\)\s*$")
 
 
+def maven_component(names, name, group, artifact, version, url):
+    """A bundled Maven library as a component: its licence names (Maven's spelling) to SPDX."""
+    ids = list(dict.fromkeys(maven_license(n) or n for n in names))
+    choice = False
+    if not names:
+        lic = []
+    elif len(ids) == 1 and " " not in ids[0] and maven_license(names[0]):
+        lic = [{"license": {"id": ids[0]}}]
+    elif all(maven_license(n) and " " not in maven_license(n) for n in names):
+        # a choice of licences (dual licensing): each licence of its own, so each carries its
+        # text; the property says the list is a choice, not all of them at once
+        lic = [{"license": {"id": i}} for i in ids]
+        choice = True
+    elif all(maven_license(n) for n in names):
+        lic = [{"expression": " OR ".join(ids)}]
+    else:
+        lic = [{"license": {"name": " / ".join(names)}}]
+    c = {
+        "type": "library",
+        "bom-ref": f"pkg:maven/{group}/{artifact}@{version}",
+        "name": name or artifact,
+        "group": group,
+        "version": version,
+        "purl": f"pkg:maven/{group}/{artifact}@{version}",
+        "licenses": lic,
+    }
+    if choice:
+        c["properties"] = [{"name": "openccu-lite:licence-choice", "value": "OR"}]
+    if url:
+        c["externalReferences"] = [{"type": "website", "url": url}]
+    return c
+
+
 def jar_libraries(path, errors):
     """A JAR's bundled libraries from its *-JARLICENSEINFO.txt (Maven's license list)."""
     out = []
@@ -454,35 +490,98 @@ def jar_libraries(path, errors):
             errors.append(("jar-line", f"{os.path.basename(path)}: {line.strip()}"))
             continue
         names = [n[1:-1] for n in re.findall(PAREN, m.group(1))]
-        ids = list(dict.fromkeys(maven_license(n) or n for n in names))
-        group, artifact, version, url = m.group(3), m.group(4), m.group(5), m.group(6)
-        choice = False
-        if len(ids) == 1 and " " not in ids[0] and maven_license(names[0]):
-            lic = [{"license": {"id": ids[0]}}]
-        elif all(maven_license(n) and " " not in maven_license(n) for n in names):
-            # a choice of licences (dual licensing): each licence of its own, so each carries its
-            # text; the property says the list is a choice, not all of them at once
-            lic = [{"license": {"id": i}} for i in ids]
-            choice = True
-        elif all(maven_license(n) for n in names):
-            lic = [{"expression": " OR ".join(ids)}]
-        else:
-            lic = [{"license": {"name": " / ".join(names)}}]
-        c = {
-            "type": "library",
-            "bom-ref": f"pkg:maven/{group}/{artifact}@{version}",
-            "name": m.group(2).strip() or artifact,
-            "group": group,
-            "version": version,
-            "purl": f"pkg:maven/{group}/{artifact}@{version}",
-            "licenses": lic,
-        }
-        if choice:
-            c["properties"] = [{"name": "openccu-lite:licence-choice", "value": "OR"}]
-        if url:
-            c["externalReferences"] = [{"type": "website", "url": url}]
-        out.append(c)
+        out.append(maven_component(names, m.group(2).strip(), m.group(3), m.group(4), m.group(5), m.group(6)))
     return out
+
+
+# the licences of bundled libraries whose own pom.xml names none (their parent POM does), by
+# group:artifact or group, in Maven's spelling - as the JARs' third-party lists of the 1.2 line and the
+# projects' parent POMs name them
+MAVEN_LICENCES = {
+    "com.fasterxml.jackson.dataformat": ["Apache-2.0"],
+    "com.fasterxml.jackson.module": ["Apache-2.0"],
+    "com.google.guava": ["Apache-2.0"],
+    "com.sun.xml.bind.jaxb:isorelax": ["MIT"],
+    "commons-codec": ["Apache-2.0"],
+    "commons-io": ["Apache-2.0"],
+    "commons-lang": ["Apache-2.0"],
+    "commons-logging": ["Apache-2.0"],
+    "commons-net": ["Apache-2.0"],
+    "io.dropwizard.metrics": ["Apache-2.0"],
+    "io.netty": ["Apache-2.0"],
+    "io.prometheus": ["Apache-2.0"],
+    "io.vertx": ["EPL-2.0", "Apache-2.0"],
+    "io.vertx:vertx-auth-common": ["EPL-1.0", "Apache-2.0"],
+    "io.vertx:vertx-bridge-common": ["EPL-1.0", "Apache-2.0"],
+    "io.vertx:vertx-dropwizard-metrics": ["EPL-1.0", "Apache-2.0"],
+    "io.vertx:vertx-web-common": ["EPL-1.0", "Apache-2.0"],
+    "org.apache.commons": ["Apache-2.0"],
+    "org.apache.httpcomponents": ["Apache-2.0"],
+    "org.apache.logging.log4j": ["Apache-2.0"],
+    "org.eclipse.jetty": ["Apache-2.0", "EPL-1.0"],
+    "org.eclipse.paho": ["EPL-2.0"],
+    "org.jupnp": ["CDDL-1.0"],
+    "org.slf4j": ["MIT"],
+}
+
+# the JAR's own modules (eQ-3's): the JAR itself, not a library it bundles
+OWN_GROUPS = ("de.eq3",)
+
+POM_PROPERTIES = re.compile(r"^META-INF/maven/([^/]+)/([^/]+)/pom\.properties$")
+
+
+def pom_fields(data):
+    """name, url and licence names of a pom.xml, without its parent's."""
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError:
+        return "", "", []
+    ns = root.tag[:root.tag.index("}") + 1] if root.tag.startswith("{") else ""
+    def text(el, tag):
+        e = el.find(ns + tag)
+        return (e.text or "").strip() if e is not None and e.text else ""
+    lics = [text(l, "name") for l in root.findall(f"{ns}licenses/{ns}license")]
+    return text(root, "name"), text(root, "url"), [n for n in lics if n]
+
+
+def jar_maven_libraries(path):
+    """A JAR's bundled libraries from the Maven metadata its build keeps of each:
+    META-INF/maven/<group>/<artifact>/pom.properties (the version) and the pom.xml next to it (name,
+    website, licences; MAVEN_LICENCES when it names none). The HMIPServer JARs of OpenCCU-Base 2.0
+    carry no third-party list (B-360); this is what a JAR scanner reads too."""
+    out = []
+    try:
+        z = zipfile.ZipFile(path)
+    except (OSError, zipfile.BadZipFile):
+        return out
+    with z:
+        names = set(z.namelist())
+        for n in sorted(names):
+            m = POM_PROPERTIES.match(n)
+            if not m or m.group(1).startswith(OWN_GROUPS):
+                continue
+            props = {}
+            for line in z.read(n).decode("utf-8", "replace").splitlines():
+                k, sep, v = line.partition("=")
+                if sep and not k.lstrip().startswith("#"):
+                    props[k.strip()] = v.strip()
+            group = props.get("groupId") or m.group(1)
+            artifact = props.get("artifactId") or m.group(2)
+            version = props.get("version") or ""
+            name, url, lics = "", "", []
+            pom = n[: -len("pom.properties")] + "pom.xml"
+            if pom in names:
+                name, url, lics = pom_fields(z.read(pom))
+            if not lics:
+                lics = MAVEN_LICENCES.get(f"{group}:{artifact}") or MAVEN_LICENCES.get(group) or []
+            out.append(maven_component(lics, name, group, artifact, version, url))
+    return out
+
+
+def merge_libraries(listed, found):
+    """The listed libraries, then the ones found in the JAR's metadata that the list misses."""
+    seen = {(c["group"], c["purl"].rsplit("@", 1)[0]) for c in listed}
+    return listed + [c for c in found if (c["group"], c["purl"].rsplit("@", 1)[0]) not in seen]
 
 
 def openccu_base(texts, b, errors):
@@ -522,12 +621,19 @@ def openccu_base(texts, b, errors):
         }
         if g.endswith(".jar"):
             info = os.path.join(d, f"{g}-JARLICENSEINFO.txt")
+            libs = []
             if os.path.exists(info):
                 libs = jar_libraries(info, errors)
-                if libs:
-                    c["components"] = libs
             else:
                 errors.append(("jar-info", g))
+            for f in groups[g]:
+                if os.path.basename(f) == g:
+                    libs = merge_libraries(libs, jar_maven_libraries(os.path.join(b.root, "target", f)))
+            if libs:
+                c["components"] = libs
+            else:
+                # neither a list nor metadata: an SBOM that says the JAR bundles nothing (B-360)
+                errors.append(("jar-empty", g))
         out.append(c)
     return out
 

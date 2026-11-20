@@ -1,0 +1,18 @@
+META-INF/
+META-INF/MANIFEST.MF	Manifest-Version: 1.0\nMain-Class: example.Main\n
+META-INF/LICENSE
+META-INF/maven/de.eq3.example/server/pom.properties	groupId=de.eq3.example\nartifactId=server\nversion=1.5.0\n
+META-INF/maven/de.eq3.example/server/pom.xml	<project><groupId>de.eq3.example</groupId><artifactId>server</artifactId></project>
+META-INF/maven/io.netty/netty-common/pom.properties	#Created by Apache Maven\nartifactId=netty-common\ngroupId=io.netty\nversion=4.2.5.Final\n
+META-INF/maven/io.netty/netty-common/pom.xml	<?xml version="1.0"?>\n<project xmlns="http://maven.apache.org/POM/4.0.0"><parent><groupId>io.netty</groupId><artifactId>netty-parent</artifactId><version>4.2.5.Final</version></parent><artifactId>netty-common</artifactId><name>Netty/Common</name></project>
+META-INF/maven/io.vertx/vertx-core/pom.properties	artifactId=vertx-core\ngroupId=io.vertx\nversion=5.0.4\n
+META-INF/maven/io.vertx/vertx-core/pom.xml	<project xmlns="http://maven.apache.org/POM/4.0.0"><artifactId>vertx-core</artifactId><name>Vert.x Core</name></project>
+META-INF/maven/io.vertx/vertx-web-common/pom.properties	artifactId=vertx-web-common\ngroupId=io.vertx\nversion=5.0.4\n
+META-INF/maven/com.google.code.gson/gson/pom.properties	artifactId=gson\ngroupId=com.google.code.gson\nversion=2.13.2\n
+META-INF/maven/com.google.code.gson/gson/pom.xml	<project xmlns="http://maven.apache.org/POM/4.0.0"><artifactId>gson</artifactId><name>Gson</name><url>https://github.com/google/gson</url><licenses><license><name>Apache-2.0</name></license></licenses></project>
+META-INF/maven/org.example.unknown/lib/pom.properties	artifactId=lib\ngroupId=org.example.unknown\nversion=0.1\n
+META-INF/maven/org.example.unknown/lib/pom.xml	<project><artifactId>lib</artifactId><name>An unknown library</name></project>
+example/Main.class
+io/netty/util/Version.class
+io/vertx/core/Vertx.class
+com/google/gson/Gson.class

@@ -2,6 +2,6 @@
 #
 #   <kind>:<name> # <why it is right as it is>
 #
-# kinds: no-license, no-component, go-module, go-module-license, jar-line, jar-info, linux-firmware,
+# kinds: no-license, no-component, go-module, go-module-license, jar-line, jar-info, jar-empty, linux-firmware,
 # ui-bundle, nested-show-info; <kind>:* names every gap of a kind. A line that no longer matches a
 # gap fails the check too, so this list stays short and true. Empty is the goal.

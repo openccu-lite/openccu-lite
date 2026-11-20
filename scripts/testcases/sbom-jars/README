@@ -1,0 +1,11 @@
+Directory listings of two JAR layouts for lite-sbom-jar-test.sh (B-360) - made up, a few entries
+each, not eQ-3's JARs (their binaries stay out of the repository). One entry per line; a line
+"<path><TAB><text>" is a small text file with that content ("\n" for a newline), any other line an
+empty file. The test zips each listing into a JAR.
+
+- jar-third-party-list.list: the layout of the 1.2 line's HMIPServer.jar - THIRD-PARTY.txt and
+  licenses/ at the top, the Maven metadata under META-INF/maven. jar-third-party-list.info is what
+  createLicenseForJar.py writes from it.
+- jar-maven-only.list: the layout of OpenCCU-Base 2.0's HMIPServer.jar and ESHBridge.jar - no
+  third-party list, no licenses/, only META-INF/maven. jar-maven-only.info is the empty list
+  createLicenseForJar.py writes for it.
