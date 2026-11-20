@@ -81,6 +81,17 @@ hand_over
 # the test stops here, before the base install would touch /usr/local/tmp of the machine it runs on
 [ -n "${OCCU_INSTALL_TEST_STOP:-}" ] && exit "${OCCU_INSTALL_TEST_STOP}"
 
+# The base install below unpacks into a mktemp directory under /usr/local/tmp (the userfs) and
+# removes it only after update_script ran: every failure exit (102 a broken archive, 103, 104 no
+# update_script, 105/106 a checksum) left the archive's whole content on the SD card until the next
+# boot. The directory goes on every exit and on a signal; UPDATEDIR is emptied first so that a value
+# from the environment can never be what the trap removes before the base install sets it.
+UPDATEDIR=
+trap 'rm -rf "${UPDATEDIR}"' EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 # ---- overlay/base/bin/install_addon from here on ----
 #
 # simple install_addon script that will install CCU addons

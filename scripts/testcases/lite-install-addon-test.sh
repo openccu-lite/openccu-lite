@@ -7,7 +7,9 @@
 # (not listening, 401, 404) the base install runs as always - seen here as the script's test stop
 # right before it (exit 99), with the archive put back where it was. A 409 or a
 # connection that broke after the upload installs nothing (exit 1). curl is a fake on PATH that
-# records its arguments and answers what the case asks for; nothing needs root.
+# records its arguments and answers what the case asks for; nothing needs root. The base install's
+# failure exits (101, 102, 104, 105) run on a copy whose /usr/local/tmp is the test's own directory:
+# its unpack directory is gone afterwards.
 #
 # Usage: sh scripts/testcases/lite-install-addon-test.sh    (from the fork's checkout)
 set -u
@@ -102,7 +104,48 @@ for c in "HTTP 409|0|HTTP/1.1 409 Conflict\r\n\r\n" "curl 52|52|"; do
     && ok "refused ($label): exit 1, nothing installed" || fail "refused ($label): exit $code, $(ls "$T/tmp")"
 done
 
-# 7. everything below the hand-over is the base copy unchanged
+# 7. the base install's failure exits leave no unpack directory behind: a copy of the script whose
+#    /usr/local/tmp is the test's directory, run without the test stop and without a token (no
+#    hand-over); every exit taken here comes before update_script, but should one reach it, mount,
+#    sync and ldconfig are stand-ins. The base body uses [[ ]] (busybox ash on the system): run it
+#    with bash, which has it, where dash would skip every check
+B="$T/base"
+sed -e "s#/usr/local/tmp#$B/tmp#g" -e "s#/sbin/ldconfig#$T/bin/ldconfig#g" "$SCRIPT" > "$B.sh"
+for f in mount sync ldconfig; do printf '#!/bin/sh\necho "%s $*" >> "%s"\n' "$f" "$LOG" > "$T/bin/$f"; chmod 755 "$T/bin/$f"; done
+BSH=$(command -v bash || command -v busybox) || { echo "lite-install-addon-test: needs bash or busybox"; exit 2; }
+[ "${BSH##*/}" = busybox ] && BSH="$BSH sh"
+base_run() { # archive-maker -> $code, the tmp directory's content in $left
+  rm -rf "$B"; mkdir -p "$B/tmp" "$B/src"; : > "$LOG"
+  "$@"
+  # shellcheck disable=SC2086 # BSH is "bash" or "busybox sh"
+  UPDATEDIR=/must/not/be/removed OCCU_INSTALL_TOKEN_FILE="$T/none" OCCU_INSTALL_CGROUP="$T/cg-ssh" PATH="$T/bin:$PATH" \
+    $BSH "$B.sh" > "$T/stdout" 2> "$T/stderr"
+  code=$?
+  left=$(ls -A "$B/tmp")
+  [ ! -s "$LOG" ] || fail "exit $code reached mount, sync or ldconfig: $(cat "$LOG")"
+}
+no_script() { echo payload > "$B/src/readme.txt"; tar -C "$B/src" -czf "$B/tmp/new_addon.tar.gz" readme.txt; }
+not_exec()  { echo 'exit 0' > "$B/src/update_script"; chmod 644 "$B/src/update_script"; tar -C "$B/src" -czf "$B/tmp/new_addon.tar.gz" update_script; }
+bad_sum()   { printf '#!/bin/sh\nexit 0\n' > "$B/src/update_script"; chmod 755 "$B/src/update_script"
+              echo "0000000000000000000000000000000000000000000000000000000000000000  update_script" > "$B/src/addon.sha256"
+              tar -C "$B/src" -czf "$B/tmp/new_addon.tar.gz" update_script addon.sha256; }
+junk()      { echo 'not a tar archive' > "$B/tmp/new_addon.tar.gz"; }
+base_run no_script
+[ "$code" = 104 ] && [ -z "$left" ] && ok "no update_script (104): nothing left in the tmp directory" || fail "no update_script: exit $code, left '$left'"
+base_run not_exec
+[ "$code" = 104 ] && [ -z "$left" ] && ok "update_script not executable (104): nothing left" || fail "update_script not executable: exit $code, left '$left'"
+base_run bad_sum
+case "$code" in
+  105|106) [ -z "$left" ] && ok "a wrong checksum ($code): nothing left" || fail "a wrong checksum: left '$left'" ;;
+  *) fail "a wrong checksum: exit $code, left '$left'" ;;
+esac
+base_run junk
+# a broken archive (102): the unpack directory goes, the archive stays where the caller put it, as in the base
+[ "$code" = 102 ] && [ "$left" = new_addon.tar.gz ] && ok "a broken archive (102): only the archive is left" || fail "a broken archive: exit $code, left '$left'"
+base_run true
+[ "$code" = 101 ] && [ -z "$left" ] && ok "no archive (101): nothing made" || fail "no archive: exit $code, left '$left'"
+
+# 8. everything below the hand-over is the base copy unchanged
 if [ "$(sed -n '/^# check if we have an update archive/,$p' "$SCRIPT")" = "$(sed -n '/^# check if we have an update archive/,$p' "$BASE")" ]; then
   ok "the install itself is the base copy's"
 else
