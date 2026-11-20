@@ -375,6 +375,7 @@ logged.
 | `authkeys-read`, `authkeys-write`, `ssh-end`, `ssh-keyonly` | root's `authorized_keys` (public keys only; occulited's section replaced, each key checked again: a modern type, no options, one line); SIGTERM to one `sshd-session` of a connection; the two lines that refuse password logins |
 | `openfd` | opens the file an addon's CGI names in `X-Sendfile` under `/usr/local/tmp/` with `O_NOFOLLOW`, checks it through `/proc/self/fd`, passes a regular file back as a descriptor (`SCM_RIGHTS`) |
 | `smartctl` | exactly `smartctl -j -H -A -i <device>` for a whole SATA/USB/NVMe disk, 60 s |
+| `io-accounting` | a boolean and nothing else: on writes `/run/systemd/system.conf.d/50-occulite-io-accounting.conf` with the helper's own fixed text (`[Manager]` `DefaultIOAccounting=yes`; a link at the path is replaced by a rename, not followed), off removes it; the daemon reloads systemd. It lets the daemon turn the kernel's io accounting on for every unit, nothing else in the manager's configuration |
 | `listlogs` | the paths, sizes and times of log files in a directory under `/usr/local/addons/` or `/var/log/`, never their content |
 | further named operations | each on its own fixed paths or devices: the firewall's load, confirm and revert (`firewall-load`, `firewall-confirm`, `firewall-revert`), a network share's mount (`netmount`, `netunmount`), a USB stick's format and eject, the radio module's flash (`flashcopro`), the bootloader's staging, the status LED, the CCU's leftovers' removal |
 
@@ -677,6 +678,11 @@ Known, accepted for now, and written down so that nobody has to rediscover them.
 | R10 | **An ingress addon vouches for its peers' addresses** (B1b, B5c): whatever runs as `addon-<id>` can claim any address inside the ranges its manifest declared — another of its own peers, say — though never the loopback or a LAN address | The addon is the end of the tunnel, so nothing else knows the peer's address; the socket's directory keeps every other addon out, and the addon runs confined | The tunnel in the kernel with the address on an interface, where the kernel vouches for the source |
 | R11 | **No second factor of the system's own**: a passkey is an alternative login, and the password alone still opens a session | A decision for a household system; an identity provider brings its own second factor | A second factor (TOTP, or passkeys required) as an option |
 | R12 | **An addon's command names reach an interactive root shell** (B5d, `runtime.bin`): a name only the addon has - `htop`, say - runs the root-owned file the addon's package installed; and an addon process that held a file in its bin directory open for writing before the walk keeps that descriptor | The files are the package's, as trusted as the install, which runs `update_script` as root; nothing its user makes later is taken over, the directory is appended (no system command is shadowed) and interactive shells only; the walk before a start runs with the unit's processes ended | The tools in a directory outside the addon's tree, copied there by root at the install |
+
+Vulnerabilities in the components the image is built from (the Buildroot packages, the Go modules, the Java
+runtime, the kernel) are not a residual risk of their own: a daily [report](https://openccu-lite.github.io/openccu-lite/cve-en.html) lists the severe ones
+that affect a released image, and a release that fixes them follows. eQ-3's programs and the libraries in their Java
+archives are outside it (R4).
 
 ## Audit log
 

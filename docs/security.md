@@ -345,6 +345,14 @@ from outside.
   runs its package's install script as root, as on every CCU — installing is trusting the package.
 - **Device firmware** comes from eQ-3's server over HTTPS; there is no published sum to check it against.
 - An SBOM (CycloneDX) is published with every release and served at `/api/system/v1/sbom`.
+- **Known vulnerabilities**: a daily [report](https://openccu-lite.github.io/openccu-lite/cve-en.html) ([deutsch](https://openccu-lite.github.io/openccu-lite/cve.html)) checks the components
+  of the released images (from their SBOMs: the Buildroot packages, the Go modules, the Java runtime, the kernel)
+  against NVD, CISA's catalogue of known exploited vulnerabilities, OSV and the kernel's CVE records. It lists
+  only severe CVEs that affect a shipped version - known exploited, or CVSS 9.0 or more over the network (8.0 for
+  the Java runtime, and for sshd, OpenSSL and glibc without authentication) - for the latest release, the newest
+  pre-release and the previous stable release, with what a release fixed. The libraries inside eQ-3's Java
+  archives are listed for information: only a new HMIPServer can update them. The rules are in
+  `scripts/lite-cve-scan.py`, false positives with their reason in `security/cve-ignore.txt`.
 
 ## Backups
 

@@ -20,6 +20,10 @@ once it is out.
 What is in scope, how the system is meant to hold together and the risks that are known and
 accepted are in [docs/security.md](docs/security.md) and [docs/threat-model.md](docs/threat-model.md).
 
+Known vulnerabilities in the components of the released images (the Buildroot packages, the Go modules, the Java
+runtime, the kernel) are listed in a daily [report](https://openccu-lite.github.io/openccu-lite/cve-en.html) ([deutsch](https://openccu-lite.github.io/openccu-lite/cve.html)); a CVE that
+is listed there needs no report, though a note on how it affects openccu-lite is welcome.
+
 A problem that is in upstream OpenCCU as well (the parts openccu-lite takes unchanged) is best
 reported to [OpenCCU](https://github.com/OpenCCU/OpenCCU/security) too; a problem in eQ-3's
 programs (`rfd`, `hs485d`, `multimacd`, `hmipserver`) belongs to [OpenCCU-base](https://github.com/OpenCCU/OpenCCU-base).

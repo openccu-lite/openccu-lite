@@ -231,8 +231,11 @@ Programs elsewhere on the network that talked to the CCU keep its devices, but l
   `box_token is the only credential behind the box`. The way out: stop Home Assistant Core, make a copy of
   `.storage/core.config_entries`, delete the two keys `username` and `password` from the integration's entry, and
   start Home Assistant again. This is the integration's behaviour; newer versions may handle it differently.
-- **ioBroker:** [ioBroker.hm-rpc](https://github.com/ioBroker/ioBroker.hm-rpc) connects to the interface processes
-  as to a CCU, through classic RPC (above).
+- **ioBroker:** [ioBroker.hm-rpc](https://github.com/ioBroker/ioBroker.hm-rpc) from 4.3.0 has the daemon
+  *openccu-lite*: one instance per interface as with a CCU, through the system's lite-rpc on the web port, paired in
+  the instance settings, with names, rooms and functions from the system and no callback. An existing instance switched
+  to it keeps its object ids; hm-rega and CUxD go. Step by step: [iobroker.md](iobroker.md). Until it is switched, a
+  classic instance keeps working through classic RPC (above).
 - **Whatever needs the ReGa does not work:** system variables, programs, HM-Script, the WebUI's JSON-RPC API
   (`/api/homematic.cgi`), the ReGa's ports 1999 and 8181, and with them
   [ioBroker.hm-rega](https://github.com/ioBroker/ioBroker.hm-rega), CUxD and the XML-API addon. Names, rooms and

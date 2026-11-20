@@ -281,6 +281,15 @@ stoppen, neu starten und ihr Protokoll öffnen; das Menü „…“ bietet mehr,
 Spalte Benutzer, ob es eingesperrt unter einem eigenen Benutzer läuft oder als `root`. Darunter die **Zeitpläne**
 (systemd-Timer, auch eigene) und der **Startablauf** des letzten Systemstarts.
 
+Der Schalter **Schreibzugriffe pro Dienst aufzeichnen** lässt den Kernel zählen, was jeder Dienst von den
+Datenträgern liest und auf sie schreibt; was in den Zwischenspeicher geschrieben und erst später auf den Datenträger
+gebracht wird, zählt für den Dienst, der es geschrieben hat. Das gilt sofort, ohne dass ein Dienst neu startet, und
+bleibt über einen Neustart des Systems hinweg eingeschaltet; gezählt wird jeweils ab dem Einschalten bzw. ab dem Start
+des Systems. Das Zählen selbst schreibt nichts auf die SD-Karte, die Werte liegen nur im Arbeitsspeicher. Angezeigt
+werden sie unter [Speicher](#speicher). Der Schalter braucht den io-Controller des Kernels, den jedes Image von
+openccu-lite mitbringt. In einem Container entscheidet der Host: Steht `io` nicht in
+`/sys/fs/cgroup/cgroup.controllers` des Containers, ist der Schalter gesperrt und nennt den Grund.
+
 #### Startablauf
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="44-startablauf-dunkel.png"><img alt="Startablauf" src="44-startablauf.png"></picture>
@@ -350,6 +359,13 @@ Datenpunkte der Geräte aufgezeichnet werden, mit der Möglichkeit, weitere hinz
 Angesteckte **USB-Sticks** (formatieren, sicher entfernen, und wofür sie gerade verwendet werden) und
 **Netzwerkfreigaben** (SMB oder NFS), die das System einhängt, etwa als Ziel für Sicherungen, die Kopien des Journals
 oder den Verlauf.
+
+**Schreibzugriffe** zeigt für jeden Datenträger, wie viel seit dem Start des Systems, in der letzten Stunde und in den
+letzten 24 Stunden geschrieben wurde. Eine SD-Karte und ein eMMC altern mit jedem Schreibvorgang; schreibt das System
+im Schnitt viel auf eine davon, nennt ein Hinweis die Dienste, die das meiste geschrieben haben. Ist unter
+[Dienste](#dienste) die Aufzeichnung pro Dienst eingeschaltet, listet **Nach Dienst**, was jeder Dienst geschrieben hat,
+dazu, was der Kernel selbst schreibt (vor allem die Journale der Dateisysteme) und was Läufe geschrieben haben, die
+zwischen zwei Ablesungen geendet haben. Nach einem Neustart des Systems beginnen die Zahlen von vorn.
 
 ### Sicherung
 

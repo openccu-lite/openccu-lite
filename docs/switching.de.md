@@ -244,8 +244,12 @@ lieferte.
   `.storage/core.config_entries` anlegen, im Eintrag der Integration die beiden Schlüssel `username` und `password`
   löschen und Home Assistant wieder starten. Das ist ein Verhalten der Integration; neuere Versionen können es
   anders handhaben.
-- **ioBroker:** [ioBroker.hm-rpc](https://github.com/ioBroker/ioBroker.hm-rpc) verbindet sich mit den
-  Schnittstellenprozessen wie mit einer CCU, über klassisches RPC (oben).
+- **ioBroker:** [ioBroker.hm-rpc](https://github.com/ioBroker/ioBroker.hm-rpc) hat ab 4.3.0 den Dämon
+  *openccu-lite*: eine Instanz je Schnittstelle wie bei einer CCU, über lite-rpc auf dem Webport des Systems, gekoppelt
+  in den Instanzeinstellungen, mit Namen, Räumen und Gewerken vom System und ohne Rückkanal. Eine bestehende Instanz,
+  die darauf umgestellt wird, behält ihre Objekt-IDs; hm-rega und CUxD fallen weg. Schritt für Schritt:
+  [iobroker.de.md](iobroker.de.md). Bis zur Umstellung arbeitet eine klassische Instanz über klassisches RPC weiter
+  (oben).
 - **Was die ReGa braucht, geht nicht:** Systemvariablen, Programme, HM-Script, die JSON-RPC-API der WebUI
   (`/api/homematic.cgi`), die ReGa-Ports 1999 und 8181, und damit
   [ioBroker.hm-rega](https://github.com/ioBroker/ioBroker.hm-rega), CUxD und das XML-API-Addon. Namen, Räume und

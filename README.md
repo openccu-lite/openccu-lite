@@ -8,6 +8,7 @@
 [![stable release](https://img.shields.io/github/v/release/openccu-lite/openccu-lite?label=stable)](https://github.com/openccu-lite/openccu-lite/releases/latest)
 [![beta](https://openccu-lite.github.io/openccu-lite/beta.svg)](https://github.com/openccu-lite/openccu-lite/releases)
 [![upstream versions](https://img.shields.io/endpoint?url=https://openccu-lite.github.io/openccu-lite/badge.json)](https://openccu-lite.github.io/openccu-lite/)
+[![severe CVEs](https://img.shields.io/endpoint?url=https://openccu-lite.github.io/openccu-lite/cve-badge.json)](https://openccu-lite.github.io/openccu-lite/cve.html)
 
 [:uk: English README](README.en.md)
 
@@ -79,8 +80,12 @@ Diese Addons lassen sich nicht auf einer CCU3 oder auf OpenCCU installieren.
   Prometheus, Elasticsearch, SQL-Datenbanken, Syslog, Loki, Webhooks u. a. weiterleiten
 - [lite-addon-nut](https://github.com/openccu-lite/lite-addon-nut) - NUT-Client: f채hrt das System bei Stromausfall
   rechtzeitig herunter, wenn die USV es meldet
+- [lite-addon-shell](https://github.com/openccu-lite/lite-addon-shell) - Root-Shell und Dateien des Systems im Browser,
+  체ber den SSH-Server des Systems mit Anmeldung pro Sitzung
 - [lite-addon-snmp](https://github.com/openccu-lite/lite-addon-snmp) - SNMP-Agent mit Daten der Homematic-Ger채te und
   -Schnittstellen, Traps
+- [lite-addon-sync](https://github.com/openccu-lite/lite-addon-sync) - Cloud-Konten (OneDrive, Google Drive, Dropbox, S3,
+  WebDAV) als verschl체sselte Sicherungsziele, dazu Ordner des Systems in ein Konto oder auf einen SSH-Server kopieren
 - [lite-addon-tailscale](https://github.com/openccu-lite/lite-addon-tailscale) - Fernzugriff auf das System 체ber ein
   Tailscale-Netz, auch mit eigenem Headscale
 - [lite-addon-tools](https://github.com/openccu-lite/lite-addon-tools) - Werkzeuge f체r die Fehlersuche und Verwaltung auf
@@ -118,7 +123,9 @@ neue Hardware. Alles Weitere: [Wechsel von und zu OpenCCU](docs/switching.de.md)
 Auf der Seite *Updates* der Weboberfl채che: *Jetzt pr체fen*, *Herunterladen und bereitstellen*, *Neu starten und
 installieren*. Vor der Installation wird eine Sicherung auf die eingerichteten Sicherungsziele geschrieben und die
 Pr체fsumme kontrolliert. Per SSH geht dasselbe mit `occulited update check` und `occulited update install`
-([Befehle und Optionen](https://github.com/openccu-lite/occulited/blob/master/docs/config.md)).
+([Befehle und Optionen](https://github.com/openccu-lite/occulited/blob/master/docs/config.md)). Ohne Klick und ohne
+Konsole, etwa aus Ansible oder mit Renovate, geht es 체ber die HTTP-API:
+[Updates aus einer Pipeline](docs/update-pipeline.de.md).
 
 Welche Versionen angeboten werden, ist einstellbar: **stable** (nur fertige Releases, die Voreinstellung), **beta** (dazu
 Beta- und Release-Candidate-Versionen) oder **dev** (alles, auch Entwicklungsst채nde).
@@ -144,6 +151,7 @@ Beta- und Release-Candidate-Versionen) oder **dev** (alles, auch Entwicklungsst�
 **Erste Schritte**
 - [Rundgang durch die Weboberfl채che](docs/walkthrough/README.md): jede Seite mit Bild
 - [Wechsel von und zu OpenCCU](docs/switching.de.md)
+- [ioBroker: von einer CCU zu openccu-lite](docs/iobroker.de.md): der openccu-lite-Modus von hm-rpc, die Objekte bleiben
 - [Empfehlungen](docs/recommendations.de.md)
 - [Was sich gegen체ber OpenCCU 채ndert](docs/aenderungen.md)
 - [Funkmodule und multimacd: alle Einstellungen](docs/radio.md)
@@ -152,6 +160,7 @@ Beta- und Release-Candidate-Versionen) oder **dev** (alles, auch Entwicklungsst�
 - [Lokaler Schl체sselmodus f체r HmIP](docs/lokaler-schluesselmodus.md): offlinef채hig, Funkmodultausch ohne den
   Schl체sselserver von eQ-3
 - [Zertifikate](docs/tls-acme.md) (eigene oder automatisch per ACME)
+- [Updates aus einer Pipeline](docs/update-pipeline.de.md): API-Token, Shell-Skript, Ansible-Playbook, Renovate
 - [occulite-backup](https://github.com/openccu-lite/occulite-backup): Sicherungen eines oder mehrerer Systeme per Cron
   oder Timer herunterladen
 
