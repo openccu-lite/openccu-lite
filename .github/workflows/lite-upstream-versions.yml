@@ -4,6 +4,8 @@
 # relevant OpenCCU-Base commits does OpenCCU's latest release build that our line lacks (findings), which
 # only OpenCCU's master (notes; from https://openccu-lite.github.io/OpenCCU-Base/)?
 # Which upstream commits on the drivers does our piVCCU fork lack (against alexreinert/piVCCU)?
+# And which severe CVEs affect the released images (scripts/lite-cve-scan.py; its page cve.html on the same site,
+# its badge cve-badge.json in the READMEs)?
 # scripts/lite-upstream-versions.py reads the pins and compares them with upstream (the components and
 # the rule for "current" are in its header) and writes a report page, which this publishes on GitHub
 # Pages (source "GitHub Actions"): https://openccu-lite.github.io/openccu-lite/, with badge.json for the
@@ -148,6 +150,17 @@ jobs:
           # anonymous rate limit
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/lite-upstream-versions.py --site "$RUNNER_TEMP/site"
+      - name: Severe CVEs in the released images
+        # scripts/lite-cve-scan.py: the SBOMs of the Latest release, the newest pre-release and the previous
+        # stable release against NVD (fkie-cad's feed files), CISA KEV, OSV and the kernel's CVE records; writes
+        # cve.html, cve-en.html, cve.json and cve-badge.json into the same site. Findings never fail the run (the
+        # page and the README badge are the report); a check that could not read its data gives a grey badge
+        # and does not keep the upstream report from being published.
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/lite-cve-scan.py --site "$RUNNER_TEMP/site"
       - uses: actions/upload-pages-artifact@v3
         # also after a failed check: the page and the badge then say "check failed"
         if: ${{ !cancelled() }}

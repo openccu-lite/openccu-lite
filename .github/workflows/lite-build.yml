@@ -68,6 +68,10 @@ jobs:
       - name: The Pi kernel maps USB buffers directly (B-91's assumption)
         # task 333: dwc_otg's kernel without CONFIG_DMA_BOUNCE_UNALIGNED_KMALLOC, which B-91's patch cannot handle
         run: sh scripts/testcases/lite-kernel-dma-guard-test.sh
+      - name: The lite kernel fragments hold in the built kernel
+        # the guard the lite post-build runs: every option of lite.config and lite-systemd.config is
+        # in each kernel .config as the fragment says (the io controller for the write accounting too)
+        run: sh scripts/testcases/lite-kernel-fragment-guard-test.sh
       - name: irqbalance leaves the IRQs alone whose affinity the kernel fixes
         # task 346: lite-irqbalance bans what refuses a write of its own mask; no boot warning per IRQ
         run: sh scripts/testcases/lite-irqbalance-test.sh
@@ -108,6 +112,9 @@ jobs:
       - name: npm purls by the purl spec
         # B-325: lite-sbom.py percent-encodes a scoped npm name's '@' (pkg:npm/%40scope/name@version)
         run: sh scripts/testcases/lite-sbom-npm-purl-test.sh
+      - name: The SBOM lists the libraries inside the JARs
+        # B-360: OpenCCU-Base 2.0's JARs carry no third-party list; lite-sbom.py reads their Maven metadata
+        run: sh scripts/testcases/lite-sbom-jar-test.sh
       - name: The piVCCU packages' bump helpers pin the fork
         # B-330: update-generic_raw_uart.sh and update-detect_radio_module.sh pin the piVCCU fork's
         # tag or a commit on its lite (never a branch, never Alex's master), the hash from two equal
@@ -236,6 +243,10 @@ jobs:
         # scripts/lite-upstream-versions.py against fixtures; the network check itself is
         # lite-upstream-versions.yml, daily on GitHub only
         run: sh scripts/testcases/lite-upstream-versions-test.sh
+      - name: The daily CVE report finds what its rule says
+        # scripts/lite-cve-scan.py against fixtures from public data; the scan itself is a step of
+        # lite-upstream-versions.yml, daily on GitHub only
+        run: sh scripts/testcases/lite-cve-scan-test.sh
       - name: The lighttpd redirects and the session gate, on a real lighttpd
         # the base and lite overlays' lighttpd configuration with occulited's fragment and gate, parsed
         # and driven by curl in an Alpine container (docker, apk over the network): the HTTP -> HTTPS

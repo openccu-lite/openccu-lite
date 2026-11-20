@@ -53,6 +53,10 @@ jobs:
         run: sh scripts/testcases/lite-module-sig-guard-test.sh
       - name: The Pi kernel maps USB buffers directly (B-91's assumption)
         run: sh scripts/testcases/lite-kernel-dma-guard-test.sh
+      - name: The lite kernel fragments hold in the built kernel
+        # the guard the lite post-build runs: every option of lite.config and lite-systemd.config is
+        # in each kernel .config as the fragment says (the io controller for the write accounting too)
+        run: sh scripts/testcases/lite-kernel-fragment-guard-test.sh
       - name: irqbalance leaves the IRQs alone whose affinity the kernel fixes
         run: sh scripts/testcases/lite-irqbalance-test.sh
       - name: The boot script is the product's boot.cmd
@@ -73,6 +77,9 @@ jobs:
         run: sh scripts/testcases/lite-hmserver-jar-test.sh
       - name: npm purls by the purl spec
         run: sh scripts/testcases/lite-sbom-npm-purl-test.sh
+      - name: The SBOM lists the libraries inside the JARs
+        # B-360: OpenCCU-Base 2.0's JARs carry no third-party list; lite-sbom.py reads their Maven metadata
+        run: sh scripts/testcases/lite-sbom-jar-test.sh
       - name: The piVCCU packages' bump helpers pin the fork
         run: sh scripts/testcases/lite-pivccu-update-test.sh
       - name: The nested builds are keyed on their own inputs
@@ -147,3 +154,5 @@ jobs:
         run: sh scripts/testcases/lite-eula-test.sh
       - name: The daily upstream version check decides as its rule says (offline, fixtures)
         run: sh scripts/testcases/lite-upstream-versions-test.sh
+      - name: The daily CVE report finds what its rule says (offline, fixtures)
+        run: sh scripts/testcases/lite-cve-scan-test.sh
