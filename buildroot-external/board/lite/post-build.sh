@@ -207,14 +207,61 @@ if grep -q 'stream-request-body = 0' "${LIGHTTPD_CONF}"; then
 	echo "post-build (lite): a stream-request-body = 0 line is left in ${LIGHTTPD_CONF}" >&2
 	exit 1
 fi
-if ! grep -q '^server\.stream-request-body[[:space:]]*=[[:space:]]*1' "${LIGHTTPD_CONF}"; then
-	echo "post-build (lite): no server.stream-request-body = 1 line in ${LIGHTTPD_CONF}" >&2
-	exit 1
-fi
+
+# And no body on the SD card in normal use (B-358). With upstream's streaming mode 1 lighttpd reads
+# from a backend as fast as the loopback delivers and puts whatever the client has not taken yet
+# beyond 64 KiB into a temp file in server.upload-dirs - and with every backend behind mod_proxy on
+# the loopback that is every answer above 64 KiB: the shell's and the addons' scripts and
+# stylesheets, and the Status page's 230 KiB radio health answer every ten seconds. Measured on a
+# Pi 3 with three tabs open (the shell, Homematic Manager, Node-RED): 256 MB of temp files an hour
+# created, written and unlinked in /usr/local/tmp/lighttpd - most are gone before the kernel writes
+# them out, but each is a create and an unlink in the ext4 journal (60 % of what the journal wrote
+# under that load), and what lives longer reaches the card. Four changes, which only work together:
+#
+# - server.stream-response-body = 2 and server.stream-request-body = 2 (minimal buffering): lighttpd
+#   stops reading from the backend, or from the client, while 64 KiB wait for the other side, so a
+#   slow client holds the backend's write instead of a growing temp file - a multi-GB backup
+#   download over a slow line was copied to the userfs once more before - and an upload arrives only
+#   as fast as the backend stores it. Global rather than per URL: over HTTP/2 the stream's window is
+#   opened before the URL conditions apply, which is how a backup upload still left 45 MB in the
+#   upload directory with mode 2 set on its two routes alone. occulited has no write timeout and
+#   answers each request in its own goroutine, the addons' servers behind /addons/ write as their
+#   sockets allow: a held write blocks nothing else.
+# - Mode 2 alone still wrote 24 of 29 MB of a page load to temp files: mod_proxy asks the backend to
+#   close the connection after its answer, and when the backend has closed lighttpd drains what the
+#   kernel's socket buffers still hold (megabytes on the loopback) in one go, past the 64 KiB limit.
+#   So the first upload directory is /run/lighttpd-buffer, a tmpfs of 16 MiB of the web server's own
+#   that lighttpd.service mounts (TemporaryFileSystem=): the tail of an answer waits there, in RAM,
+#   bounded - not /dev/shm or /tmp, which are half the RAM (the reason the directory went to the
+#   userfs: an anonymous client could take the RAM with a body).
+# - server.upload-temp-file-size = 1 MiB instead of upstream's 16 MiB. lighttpd appends to a temp
+#   file until it has that size and frees it only when all of it is sent, so with 16 MiB files an
+#   answer to a slow client kept 17 MB in the directory although lighttpd was never more than
+#   64 KiB ahead of the client: a 56 MB backup read at 1 MB/s filled a 16 MiB tmpfs and put the
+#   other 37 MB on the userfs. With 1 MiB files the same read holds 1.1 MB.
+# - /usr/local/tmp/lighttpd stays as the second directory: when the tmpfs is full lighttpd goes on
+#   in the next one (ENOSPC, chunk.c), so whatever does not fit in 16 MiB - many big answers at
+#   once, an upload a backend cannot store as fast as it arrives over HTTP/1.1 - lands on the userfs
+#   as before and never in more RAM.
+for lite_lighttpd_stream in stream-request-body stream-response-body; do
+	lite_opt="server.${lite_lighttpd_stream}"
+	if grep -q "^${lite_opt}[[:space:]]*=[[:space:]]*1[[:space:]]*\$" "${LIGHTTPD_CONF}"; then
+		sed -i "s|^${lite_opt}[[:space:]]*=.*\$|${lite_opt} = 2|" "${LIGHTTPD_CONF}"
+	elif ! grep -q "^${lite_opt} = 2\$" "${LIGHTTPD_CONF}"; then
+		echo "post-build (lite): no ${lite_opt} = 1 line to set to 2 in ${LIGHTTPD_CONF}" >&2
+		exit 1
+	fi
+done
 if grep -q '^server\.upload-dirs[[:space:]]*=' "${LIGHTTPD_CONF}"; then
-	sed -i 's|^server\.upload-dirs[[:space:]]*=.*$|server.upload-dirs = ( "/usr/local/tmp/lighttpd" )|' "${LIGHTTPD_CONF}"
+	sed -i 's|^server\.upload-dirs[[:space:]]*=.*$|server.upload-dirs = ( "/run/lighttpd-buffer", "/usr/local/tmp/lighttpd" )|' "${LIGHTTPD_CONF}"
 else
 	echo "post-build (lite): no server.upload-dirs line to set in ${LIGHTTPD_CONF}" >&2
+	exit 1
+fi
+if grep -q '^server\.upload-temp-file-size[[:space:]]*=' "${LIGHTTPD_CONF}"; then
+	sed -i 's|^server\.upload-temp-file-size[[:space:]]*=.*$|server.upload-temp-file-size = 1048576|' "${LIGHTTPD_CONF}"
+else
+	echo "post-build (lite): no server.upload-temp-file-size line to set in ${LIGHTTPD_CONF}" >&2
 	exit 1
 fi
 
@@ -288,6 +335,12 @@ fi
 # below the DMA mapping layer, which a kernel with CONFIG_DMA_BOUNCE_UNALIGNED_KMALLOC would undo
 # with stale bounce-buffer data. A kernel bump that brings the option back stops here.
 "$(cd "$(dirname "$0")/../../.." && pwd)/scripts/lite-kernel-dma-guard.sh" "${BUILD_DIR}"
+
+# And the lite kernel fragments hold in the kernel that was built: an option of kernel/6.18/lite.config
+# or lite-systemd.config that Kconfig dropped (a dependency missing) or that another fragment turned
+# off stops here - the systemd basics, the confinement namespaces, the cgroup controllers including
+# the io controller occulited's write accounting reads.
+"$(cd "$(dirname "$0")/../../.." && pwd)/scripts/lite-kernel-fragment-guard.sh" "${BUILD_DIR}"
 
 # And the binaries carry what the build flags promise: PIE, RELRO (full for lighttpd and its
 # modules, busybox, chronyd, sshd, systemd, the tclrega shim), a non-executable stack, the stack

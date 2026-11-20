@@ -34,10 +34,11 @@ ExecStart=-/usr/bin/occulited -lighttpd-dropins
 # the directories of the addons' web ingress sockets (occulite-ingress-<id>.conf), after occulited
 # rendered the blocks: the safety net so that lighttpd always has them to bind in
 ExecStart=-/usr/libexec/occu/lite-lighttpd-addon-socket
-# the upload overflow directory (lighttpd.conf's server.upload-dirs): on the userfs, the web
-# server's own, closed to everyone else. The shared /usr/local/tmp is root's and is emptied at boot,
-# so the directory is made here, before every start; without it a body the backend does not take
-# as fast as the client sends it has nowhere to go but an error (never RAM: /dev/shm is not on the list)
+# the upload overflow directory (the second of lighttpd.conf's server.upload-dirs): on the userfs,
+# the web server's own, closed to everyone else. The shared /usr/local/tmp is root's and is emptied
+# at boot, so the directory is made here, before every start; without it what does not fit into the
+# web server's 16 MiB tmpfs (the first directory, lighttpd.service) has nowhere to go but an error
+# (never more RAM: /dev/shm is not on the list)
 ExecStart=-/usr/bin/install -d -o www-data -g www-data -m 0700 /usr/local/tmp/lighttpd
 # a oneshot has no start timeout of its own; the web server's is 120 s
 TimeoutStartSec=120

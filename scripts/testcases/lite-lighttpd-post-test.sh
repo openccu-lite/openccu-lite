@@ -78,22 +78,51 @@ else
   # the shipped post-build sets exactly these values
   grep -q 'max-read-idle:60' "$PB" && grep -q 'max-write-idle:360' "$PB" && ok "the post-build sets the two idle values" || bad "the post-build does not set the idle values"
   grep -q 'server.max-request-size = 2359296' "$PB" && ok "the post-build sets the request-size limit" || bad "the post-build does not set the request-size limit"
-  # ---- no request body in RAM: the Content-Length exception to streaming goes, the overflow
-  # directory is the web server's own on the userfs, /dev/shm is off the list
+  # ---- no request body in RAM before the backend sees it: the Content-Length exception to streaming
+  # goes, and /dev/shm is off the list of upload directories
   grep -q '^\$REQUEST_HEADER\["Content-Length"\] == "" { server\.stream-request-body = 0 }$' "$tmpc" && ok "base lighttpd.conf has the Content-Length exception to remove" || bad "base lighttpd.conf: no Content-Length exception line to remove (rebase?)"
   grep -q '^server\.upload-dirs[[:space:]]*=.*"/dev/shm"' "$tmpc" && ok "base lighttpd.conf has /dev/shm among the upload directories to replace" || bad "base lighttpd.conf: no server.upload-dirs line with /dev/shm to replace (rebase?)"
+  # ---- B-358: and no body on the SD card in normal use. Minimal buffering in both directions (a
+  # slow side holds the other instead of a growing temp file), the temp files lighttpd still makes -
+  # the tail of an answer when the backend has closed - in a bounded tmpfs of the unit's own, and
+  # the userfs directory only as what follows when that is full
+  grep -q '^server\.stream-request-body[[:space:]]*=[[:space:]]*1$' "$tmpc" && ok "base lighttpd.conf has stream-request-body = 1 to set to 2" || bad "base lighttpd.conf: no server.stream-request-body = 1 (rebase?)"
+  grep -q '^server\.stream-response-body[[:space:]]*=[[:space:]]*1$' "$tmpc" && ok "base lighttpd.conf has stream-response-body = 1 to set to 2" || bad "base lighttpd.conf: no server.stream-response-body = 1 (rebase?)"
+  # the same edits the post-build makes
   sed -i '/^\$REQUEST_HEADER\["Content-Length"\] == "" { server\.stream-request-body = 0 }/d' "$tmpc"
-  sed -i 's|^server\.upload-dirs[[:space:]]*=.*$|server.upload-dirs = ( "/usr/local/tmp/lighttpd" )|' "$tmpc"
+  sed -i 's|^server\.stream-request-body[[:space:]]*=.*$|server.stream-request-body = 2|' "$tmpc"
+  sed -i 's|^server\.stream-response-body[[:space:]]*=.*$|server.stream-response-body = 2|' "$tmpc"
+  sed -i 's|^server\.upload-dirs[[:space:]]*=.*$|server.upload-dirs = ( "/run/lighttpd-buffer", "/usr/local/tmp/lighttpd" )|' "$tmpc"
   grep -q 'stream-request-body = 0' "$tmpc" && bad "a stream-request-body = 0 is left: a chunked body would be buffered whole" || ok "no request body is buffered whole before the backend"
-  grep -q '^server\.stream-request-body = 1$' "$tmpc" && ok "request bodies stream to the backend" || bad "server.stream-request-body = 1 is gone"
-  grep -q '^server\.upload-dirs = ( "/usr/local/tmp/lighttpd" )$' "$tmpc" && ok "the upload overflow directory is the web server's own on the userfs" || bad "server.upload-dirs not set to /usr/local/tmp/lighttpd"
+  grep -q '^server\.stream-request-body = 2$' "$tmpc" && ok "request bodies stream to the backend with minimal buffering" || bad "server.stream-request-body is not 2"
+  grep -q '^server\.stream-response-body = 2$' "$tmpc" && ok "answers stream to the client with minimal buffering" || bad "server.stream-response-body is not 2"
+  n=$(grep -c '^server\.stream-re[a-z]*-body[[:space:]]*=' "$tmpc")
+  [ "$n" -eq 2 ] && ok "no second stream-*-body line that would set another mode" || bad "$n server.stream-*-body lines in lighttpd.conf, not 2"
+  grep -q '^server\.upload-dirs = ( "/run/lighttpd-buffer", "/usr/local/tmp/lighttpd" )$' "$tmpc" && ok "the upload directories: the unit's tmpfs first, then the web server's own on the userfs" || bad "server.upload-dirs is not the tmpfs followed by /usr/local/tmp/lighttpd"
   grep -q '/dev/shm' "$tmpc" && bad "/dev/shm is still named in lighttpd.conf" || ok "/dev/shm is no upload directory"
+  # the temp files are small: lighttpd frees one only when all of it is sent, and with upstream's
+  # 16 MiB files one slow download filled the tmpfs although only 64 KiB of it waited
+  grep -q '^server\.upload-temp-file-size[[:space:]]*=[[:space:]]*16777216$' "$tmpc" && ok "base lighttpd.conf has the 16 MiB temp file size to shrink" || bad "base lighttpd.conf: no server.upload-temp-file-size = 16777216 (rebase?)"
+  sed -i 's|^server\.upload-temp-file-size[[:space:]]*=.*$|server.upload-temp-file-size = 1048576|' "$tmpc"
+  grep -q '^server\.upload-temp-file-size = 1048576$' "$tmpc" && ok "temp files are 1 MiB" || bad "server.upload-temp-file-size is not 1 MiB"
+  grep -q 'server.upload-temp-file-size = 1048576|' "$PB" && ok "the post-build sets the temp file size" || bad "the post-build does not set the temp file size"
   grep -q 'stream-request-body = 0 }/d' "$PB" && ok "the post-build removes the Content-Length exception" || bad "the post-build does not remove the Content-Length exception"
-  grep -q 'server.upload-dirs = ( "/usr/local/tmp/lighttpd" )' "$PB" && ok "the post-build sets the upload directory" || bad "the post-build does not set the upload directory"
+  grep -q 'for lite_lighttpd_stream in stream-request-body stream-response-body; do' "$PB" && grep -q '${lite_opt} = 2|' "$PB" && ok "the post-build sets both streaming modes to 2" || bad "the post-build does not set the streaming modes to 2"
+  grep -q 'server.upload-dirs = ( "/run/lighttpd-buffer", "/usr/local/tmp/lighttpd" )' "$PB" && ok "the post-build sets the upload directories" || bad "the post-build does not set the upload directories"
   PREP="$EXT/overlay/lite/usr/lib/systemd/system/lighttpd-prepare.service"
-  grep -q '^ExecStart=-/usr/bin/install -d -o www-data -g www-data -m 0700 /usr/local/tmp/lighttpd$' "$PREP" && ok "lighttpd-prepare makes the upload directory, www-data's, 0700" || bad "lighttpd-prepare.service does not make /usr/local/tmp/lighttpd for www-data"
+  grep -q '^ExecStart=-/usr/bin/install -d -o www-data -g www-data -m 0700 /usr/local/tmp/lighttpd$' "$PREP" && ok "lighttpd-prepare makes the overflow directory, www-data's, 0700" || bad "lighttpd-prepare.service does not make /usr/local/tmp/lighttpd for www-data"
   UNIT="$EXT/overlay/lite/usr/lib/systemd/system/lighttpd.service"
   grep -q '^BindPaths=-/usr/local/tmp$' "$UNIT" && grep -q '^ReadWritePaths=-/usr/local/tmp$' "$UNIT" && ok "lighttpd.service binds /usr/local/tmp writable for the overflow directory" || bad "lighttpd.service does not bind /usr/local/tmp writable"
+  # the first directory exists only as the unit's own mount, and it is bounded: a size= of 8 to
+  # 16 MiB (a Pi 3 has 1 GB and little of it free), never a directory on /run, /tmp or /dev/shm that shares their room
+  tfs=$(sed -n 's|^TemporaryFileSystem=/run/lighttpd-buffer:||p' "$UNIT")
+  case ",$tfs," in
+    *,size=[0-9]*m,*)
+      mb=$(echo ",$tfs," | sed -n 's/.*,size=\([0-9]*\)m,.*/\1/p')
+      [ "$mb" -ge 8 ] && [ "$mb" -le 16 ] && ok "lighttpd.service mounts /run/lighttpd-buffer as its own tmpfs of $mb MiB" || bad "lighttpd.service: /run/lighttpd-buffer is $mb MiB, not 8 to 16" ;;
+    *) bad "lighttpd.service has no TemporaryFileSystem=/run/lighttpd-buffer with a size= in MiB: '$tfs'" ;;
+  esac
+  case ",$tfs," in *,ro,*) bad "lighttpd.service mounts /run/lighttpd-buffer read-only" ;; *) ok "the tmpfs is writable" ;; esac
   rm -f "$tmpc"
 fi
 
@@ -156,7 +185,8 @@ server.bind = "127.0.0.1"
 server.port = 8080
 server.modules = ( "mod_proxy" )
 server.max-request-size = 1
-server.stream-request-body = 1
+server.stream-request-body = 2
+server.stream-response-body = 2
 server.upload-dirs = ( "/tmp/lighttpd-upload" )
 proxy.server = ( "" => ( ( "host" => "127.0.0.1", "port" => 9000 ) ) )
 CONF

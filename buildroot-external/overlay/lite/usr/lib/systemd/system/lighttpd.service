@@ -24,8 +24,8 @@
 # link into an addon's directory; the addons' static files and CGIs come from occulited too
 # (conf.d/occulited.conf) - lighttpd itself loads no mod_cgi.
 #
-# The sandbox below: the whole file system read-only except the pid directory and the upload
-# overflow directory; the userfs a read-only view of what the web server reads (the drop-ins and
+# The sandbox below: the whole file system read-only except the pid directory and the two upload
+# directories (a small tmpfs of its own and the overflow directory on the userfs); the userfs a read-only view of what the web server reads (the drop-ins and
 # the certificate in /etc/config, the addon trees for their error pages) and nothing else - not
 # occulited's state, not the backups, not the daemons' and the addons' own configuration
 # directories; a private /tmp and /dev; nothing executable but the system's binaries and
@@ -109,13 +109,22 @@ PrivateTmp=yes
 # directory as a whole, because occulited and the certificate check replace those files by
 # writing a new one and renaming it, and a bind of a single file would keep showing the old one),
 # the addon trees (their drop-ins name error pages there), and /usr/local/tmp, writable, for the
-# upload overflow directory in it (lighttpd.conf's server.upload-dirs: /usr/local/tmp/lighttpd,
-# the web server's own, made by lighttpd-prepare.service; nothing in RAM). Optional ("-"): a path
-# a restored backup or a factory reset does not have must not fail the namespace setup.
+# upload overflow directory in it (the second of lighttpd.conf's server.upload-dirs:
+# /usr/local/tmp/lighttpd, the web server's own, made by lighttpd-prepare.service). Optional ("-"):
+# a path a restored backup or a factory reset does not have must not fail the namespace setup.
 TemporaryFileSystem=/usr/local:ro
 BindReadOnlyPaths=-/usr/local/etc/config -/usr/local/addons
 BindPaths=-/usr/local/tmp
 ReadWritePaths=-/usr/local/tmp
+# The first of server.upload-dirs: a tmpfs of 16 MiB that only this unit sees. lighttpd
+# puts what it holds of a body beyond 64 KiB into a temp file - with every backend on the loopback
+# that is the tail of nearly every answer above 64 KiB, hundreds of megabytes an hour with a few
+# tabs open - and on the userfs each of them was a create, a write and an unlink on the SD card.
+# Here they stay in RAM, and never more than 16 MiB of it: when the tmpfs is full lighttpd goes on
+# in the next directory, the one on the userfs above (the lite post-build sets the two directories
+# and the minimal buffering that keeps the files small). Mode 1777 inside a mount only this unit's
+# processes see - the web server and its access log pipe - so no uid has to be named here.
+TemporaryFileSystem=/run/lighttpd-buffer:size=16m,mode=1777
 # the addons' web ingress sockets (runtime.web_ingress in an addon's manifest): bound in
 # /run/lighttpd-addons/<id>/, directories occulited makes with the addon's group when it renders the
 # socket's block (and lite-lighttpd-addon-socket in lighttpd-prepare.service as a safety net) - the
@@ -132,8 +141,8 @@ InaccessiblePaths=-/usr/local/etc/config/hs485d -/usr/local/etc/config/hs485type
 # pipe runs /bin/sh and /usr/bin/systemd-cat, both under /usr/bin.
 NoExecPaths=/
 ExecPaths=/usr/bin /usr/sbin /usr/lib /usr/libexec
-# /dev/shm stays as a device but is no upload directory (server.upload-dirs names the userfs
-# alone); /dev/log is the journal's socket
+# /dev/shm stays as a device but is no upload directory (server.upload-dirs names the unit's
+# own tmpfs and the userfs); /dev/log is the journal's socket
 PrivateDevices=yes
 DevicePolicy=closed
 ProtectKernelTunables=yes

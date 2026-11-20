@@ -10,8 +10,9 @@
 # lighttpd runs as the sandboxed unit runs it, as far as a container without CAP_SYS_ADMIN can:
 # as an unprivileged user with CAP_NET_BIND_SERVICE alone and no new privileges (setpriv), the
 # certificate through a certs group, the pid file in /run/lighttpd (its runtime directory; the
-# lite post-build points server.pid-file there, mirrored here), the upload overflow directory the
-# one writable place under /usr/local, conf.d/cgi.conf gone as the post-build removes it (the lite
+# lite post-build points server.pid-file there, mirrored here), the upload tmpfs /run/lighttpd-buffer
+# (B-358: a large answer's temp file stays there and off the userfs), the upload overflow directory
+# the one writable place under /usr/local, conf.d/cgi.conf gone as the post-build removes it (the lite
 # modules.conf loads no mod_cgi), and every apply runs the steps of lighttpd-prepare.service that
 # exist here, as root, taken from the unit file. At the end: the error log shows no refused write,
 # and the user created nothing outside its pid directory, the upload directories and the log. The
@@ -59,7 +60,9 @@ case "$OCC_PORT" in
 esac
 echo "occulited's port in the fragment: $OCC_PORT"
 
-exec docker run --rm -i -e "OCC_PORT=$OCC_PORT" \
+# /run/lighttpd-buffer: the tmpfs lighttpd.service mounts for the web server (TemporaryFileSystem=,
+# B-358), here docker's, small enough to fill
+exec docker run --rm -i -e "OCC_PORT=$OCC_PORT" --tmpfs /run/lighttpd-buffer:rw,size=8m,mode=1777 \
   -v "$ROOT/buildroot-external/overlay:/src/overlay:ro" \
   -v "$OCC/deploy/lighttpd:/src/occulited:ro" \
   "${ALPINE_IMAGE:-alpine:3.22}" sh -s <<'INNER'
@@ -107,10 +110,13 @@ grep -q '^server\.http-parseopts.*"url-ctrls-reject" => "enable"' /etc/lighttpd/
 if grep -q '^server\.pid-file[[:space:]]*=' /etc/lighttpd/lighttpd.conf; then
   sed -i 's|^server\.pid-file[[:space:]]*=.*$|server.pid-file = "/run/lighttpd/lighttpd.pid"|' /etc/lighttpd/lighttpd.conf
   ok "lighttpd.conf: server.pid-file replaced as the post-build does"
-  # and the body handling as the post-build leaves it: every body streams, the overflow directory is
-  # the web server's own on the userfs
+  # and the body handling as the post-build leaves it: every body streams with minimal buffering,
+  # the upload directories are the unit's own tmpfs and then the web server's own on the userfs
   sed -i '/^\$REQUEST_HEADER\["Content-Length"\] == "" { server\.stream-request-body = 0 }/d' /etc/lighttpd/lighttpd.conf
-  sed -i 's|^server\.upload-dirs[[:space:]]*=.*$|server.upload-dirs = ( "/usr/local/tmp/lighttpd" )|' /etc/lighttpd/lighttpd.conf
+  sed -i 's|^server\.stream-request-body[[:space:]]*=.*$|server.stream-request-body = 2|' /etc/lighttpd/lighttpd.conf
+  sed -i 's|^server\.stream-response-body[[:space:]]*=.*$|server.stream-response-body = 2|' /etc/lighttpd/lighttpd.conf
+  sed -i 's|^server\.upload-dirs[[:space:]]*=.*$|server.upload-dirs = ( "/run/lighttpd-buffer", "/usr/local/tmp/lighttpd" )|' /etc/lighttpd/lighttpd.conf
+  sed -i 's|^server\.upload-temp-file-size[[:space:]]*=.*$|server.upload-temp-file-size = 1048576|' /etc/lighttpd/lighttpd.conf
 else
   bad "lighttpd.conf: no server.pid-file line for the post-build to replace"
 fi
@@ -971,13 +977,68 @@ out=$(px wgaddon v2 /api/echo)
 case "$out" in connect:*) ok "nothing listens on the socket after its fragment went: $out" ;; *) bad "the socket still answers after its fragment went: $out" ;; esac
 rm -f /etc/config/httpsRedirectEnabled /etc/config/hstsEnabled
 
+echo "---- B-358: a large answer leaves nothing on the userfs"
+# every backend is behind mod_proxy on the loopback, and lighttpd puts what it holds of an answer
+# beyond 64 KiB into a temp file: in the first upload directory, the tmpfs, never in the overflow
+# directory on the userfs while the tmpfs has room - with a fast client and with a slow one, whose
+# answer waits in the backend (server.stream-response-body = 2) instead of in a file. Another
+# request is answered meanwhile. With the tmpfs full the answer still arrives whole (lighttpd goes
+# on in the next directory).
+grep -q '^server\.stream-response-body = 2$' /etc/lighttpd/lighttpd.conf && grep -q '^server\.stream-request-body = 2$' /etc/lighttpd/lighttpd.conf \
+  && ok "the running configuration streams both ways with minimal buffering" || bad "the running configuration: $(grep '^server\.stream' /etc/lighttpd/lighttpd.conf | tr '\n' ' ')"
+head -c 6000000 /dev/urandom >/backend/big.bin
+want=$(sha256sum </backend/big.bin)
+# watch <file>: note the most bytes seen in each upload directory until <file> appears
+watch() {
+  umax=0 bmax=0
+  while [ ! -e "$1" ]; do
+    u=$(find /usr/local/tmp/lighttpd -type f -exec stat -c %s {} + 2>/dev/null | awk '{s+=$1} END{print s+0}')
+    b=$(find /run/lighttpd-buffer -type f -user "$WWW" -exec stat -c %s {} + 2>/dev/null | awk '{s+=$1} END{print s+0}')
+    [ "$u" -gt "$umax" ] && umax=$u
+    [ "$b" -gt "$bmax" ] && bmax=$b
+  done
+  echo "$umax $bmax"
+}
+big() { # big <label> curl arguments...: fetch /big.bin while watching the directories
+  label=$1; shift
+  rm -f /tmp/big.done
+  watch /tmp/big.done >/tmp/big.watch &
+  wpid=$!
+  # shellcheck disable=SC2086
+  got=$(curl -sk --max-time 60 $R "$@" $S/big.bin | sha256sum)
+  : >/tmp/big.done; wait $wpid
+  read -r umax bmax </tmp/big.watch
+  [ "$got" = "$want" ] && ok "$label: the 6 MB answer arrives whole" || bad "$label: the answer differs from the backend's file"
+  echo "info  $label: at most $bmax bytes in the tmpfs, $umax in the overflow directory"
+}
+big "a fast client over HTTP/2"
+[ "$umax" -eq 0 ] && ok "a fast client: nothing in the overflow directory on the userfs" || bad "a fast client: $umax bytes in /usr/local/tmp/lighttpd"
+big "a fast client over HTTP/1.1" --http1.1
+[ "$umax" -eq 0 ] && ok "HTTP/1.1: nothing in the overflow directory on the userfs" || bad "HTTP/1.1: $umax bytes in /usr/local/tmp/lighttpd"
+# the slow client (1.5 MB/s, four seconds), and a second request beside it
+( sleep 1; curl -sk -o /dev/null -w '%{http_code} %{time_total}\n' --max-time 10 $R $S/ >/tmp/big.beside ) &
+big "a slow client" --limit-rate 1500k
+wait
+[ "$umax" -eq 0 ] && ok "a slow client: nothing in the overflow directory on the userfs" || bad "a slow client: $umax bytes in /usr/local/tmp/lighttpd"
+[ "$bmax" -le 6000000 ] && ok "a slow client: the tmpfs holds no more than the answer ($bmax bytes)" || bad "a slow client: $bmax bytes in the tmpfs"
+read -r code secs </tmp/big.beside
+case "$code $secs" in "200 0."*|"200 1."*) ok "a request beside the slow one is answered at once ($secs s)" ;; *) bad "a request beside the slow one: '$code' after '$secs' s" ;; esac
+# the tmpfs full: root's file takes all of it
+dd if=/dev/zero of=/run/lighttpd-buffer/full bs=1M count=9 2>/dev/null
+big "the tmpfs full"
+rm -f /run/lighttpd-buffer/full
+big "the tmpfs free again"
+[ "$umax" -eq 0 ] && ok "the tmpfs free again: nothing in the overflow directory" || bad "the tmpfs free again: $umax bytes in /usr/local/tmp/lighttpd"
+left=$(find /usr/local/tmp/lighttpd /run/lighttpd-buffer -type f | wc -l)
+[ "$left" -eq 0 ] && ok "no temp file is left in either directory" || bad "$left temp files left: $(find /usr/local/tmp/lighttpd /run/lighttpd-buffer -type f | tr '\n' ' ')"
+
 echo "---- what the unprivileged lighttpd touched"
 # the sandboxed unit lets lighttpd write its runtime directory and the upload directories, nothing
 # else: here the user, running with root's file system view, must not have created a file anywhere
 # else either, and its error log must show no write the system refused
-stray=$(find / -path /proc -prune -o -path /sys -prune -o -path /run/lighttpd -prune -o -path /run/lighttpd-addons -prune -o -path /usr/local/tmp -prune -o -path /dev/shm -prune -o \
+stray=$(find / -path /proc -prune -o -path /sys -prune -o -path /run/lighttpd -prune -o -path /run/lighttpd-addons -prune -o -path /run/lighttpd-buffer -prune -o -path /usr/local/tmp -prune -o -path /dev/shm -prune -o \
   -user "$WWW" -newer /tmp/www-marker ! -path /var/log/lighttpd-error.log -print 2>/dev/null)
-if [ -z "$stray" ]; then ok "lighttpd created nothing outside /run/lighttpd, /run/lighttpd-addons, /usr/local/tmp and /dev/shm"; else bad "lighttpd created files elsewhere:"; echo "$stray"; fi
+if [ -z "$stray" ]; then ok "lighttpd created nothing outside /run/lighttpd, /run/lighttpd-addons, /run/lighttpd-buffer, /usr/local/tmp and /dev/shm"; else bad "lighttpd created files elsewhere:"; echo "$stray"; fi
 if grep -Ei 'permission denied|read-only file system|operation not permitted' /var/log/lighttpd-error.log; then bad "the error log shows a refused operation (above)"; else ok "the error log shows no refused operation"; fi
 if [ -s /tmp/prepare.log ]; then echo "info  the preparation's output:"; cat /tmp/prepare.log; fi
 
