@@ -12,7 +12,9 @@
 #   - an appliance whose .ovf does not say "UEFI" fails;
 #   - the product's config builds both GRUBs and runs the staging script, upstream's post-image
 #     and the guard in that order; genimage takes the EFI directory; the embedded configuration is
-#     one plain line; install-proxmox.sh looks for the line the .ovf template carries.
+#     one plain line; install-proxmox.sh looks for the line the .ovf template carries;
+#   - grub.cfg's file_env (bootfs' cmdline.txt) exists in both GRUBs: loadenv built in, upstream's
+#     grub2 patch applied (B-365).
 #
 # Usage: sh scripts/testcases/lite-efi-boot-guard-test.sh    (from the fork's checkout)
 set -u
@@ -236,6 +238,15 @@ pc=$(sed -n 's/^BR2_TARGET_GRUB2_BUILTIN_MODULES_PC="\(.*\)"$/\1/p' "$C"); efi=$
 miss=""; for m in $pc; do case "$m" in biosdisk) continue;; esac; case " $efi " in *" $m "*) ;; *) miss="$miss $m";; esac; done
 [ -n "$pc" ] && [ -z "$miss" ] && ok "every module the BIOS GRUB has built in is in the EFI one (biosdisk apart)" || bad "the EFI GRUB lacks the BIOS one's modules:$miss"
 case " $efi " in *" efi_gop "*) ok "the EFI one has efi_gop for the screen";; *) bad "the EFI GRUB has no efi_gop";; esac
+# B-365: grub.cfg reads bootfs' cmdline.txt with file_env, which upstream's grub2 patch adds to
+# loadenv; with no module directory on bootfs, both GRUBs need loadenv built in and the patch applied
+if grep -q '^file_env ' "$EXT/board/ova/grub.cfg"; then
+	case " $pc " in *" loadenv "*) ok "grub.cfg calls file_env: the BIOS GRUB has loadenv built in";; *) bad "grub.cfg calls file_env, the BIOS GRUB lacks loadenv";; esac
+	case " $efi " in *" loadenv "*) ok "grub.cfg calls file_env: the EFI GRUB has loadenv built in";; *) bad "grub.cfg calls file_env, the EFI GRUB lacks loadenv";; esac
+	fp=$(ls "$EXT"/board/lite/patches-upstream/grub2/*.patch 2>/dev/null | head -1)
+	case "$(cat "$C")" in *'/board/lite/patches-upstream"'*|*'/board/lite/patches-upstream '*) pd=1;; *) pd=0;; esac
+	[ "$pd" = 1 ] && [ -n "$fp" ] && grep -q 'grub_register_extcmd ("file_env"' "$fp" && ok "the file_env patch is in a patch directory the product applies" || bad "no grub2 patch registering file_env under board/lite/patches-upstream/grub2 (or that directory is not in BR2_GLOBAL_PATCH_DIR)"
+fi
 grep -q '^BR2_ROOTFS_POST_IMAGE_SCRIPT=".*/board/lite/post-image-ova-efi.sh .*/board/ova/post-image.sh .*/board/lite/post-image-ova-guard.sh"$' "$C" && ok "post-image: the staging script, upstream's, then the guard" || bad "BR2_ROOTFS_POST_IMAGE_SCRIPT is not staging, upstream's post-image, guard"
 for s in post-image-ova-efi.sh post-image-ova-guard.sh; do
 	[ -x "$EXT/board/lite/$s" ] && ok "board/lite/$s is executable" || bad "board/lite/$s is missing or not executable"
