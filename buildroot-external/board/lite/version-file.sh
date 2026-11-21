@@ -46,14 +46,15 @@ grep -q "^VARIANT=" "${TARGET_DIR}/VERSION" || echo "VARIANT=lite" >>"${TARGET_D
 
 # D-44 (was D-37): VERSION is the firmware version of the OpenCCU base, LITE openccu-lite's own
 # semantic version, the release identity occulited shows and compares against the feed.
-# Task 396 (maintainer, 2026-10-25): VERSION has the three parts of the eQ-3/OpenCCU-Base release
-# (3.89.11), as a CCU3's /VERSION does, not OpenCCU's tag with its build date (3.89.11.20260919);
-# BASE in LITE-VERSION keeps the full OpenCCU tag the branch is rebased on. hmipserver's getVersion
-# answers this line, and the classic tools read it as the CCU firmware version.
+# Task 396 (maintainer, 2026-10-25): VERSION has the three parts of the eQ-3/OpenCCU-Base release,
+# as a CCU3's /VERSION does, never an OpenCCU tag with its build date. Since D-127 (2.0.0-rc.0)
+# BASE in LITE-VERSION is that OpenCCU-Base release itself (3.89.14) and is taken as it is; a date
+# part stops the build. hmipserver's getVersion answers this line, and the classic tools read it
+# as the CCU firmware version.
 if [ -n "${LITE_BASE:-}" ]; then
-	LITE_FIRMWARE=$(echo "${LITE_BASE}" | cut -d. -f1-3)
+	LITE_FIRMWARE=${LITE_BASE}
 	if ! echo "${LITE_FIRMWARE}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-		echo "version-file.sh: BASE=${LITE_BASE} in LITE-VERSION is not <major>.<minor>.<patch>[.<date>]" >&2
+		echo "version-file.sh: BASE=${LITE_BASE} in LITE-VERSION is not <major>.<minor>.<patch> (OpenCCU-Base's release)" >&2
 		exit 1
 	fi
 	sed -i -e "s/^VERSION=.*/VERSION=${LITE_FIRMWARE}/" "${TARGET_DIR}/VERSION"

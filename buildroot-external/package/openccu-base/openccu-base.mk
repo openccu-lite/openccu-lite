@@ -4,21 +4,22 @@
 #
 ################################################################################
 
-# OpenCCU-Base 3.89.13 (since 2.0.0-beta.9; 3.89.12 since 2.0.0-beta.7, task 456) from the branch
-# lite of the fork openccu-lite/OpenCCU-Base: upstream's main (since 2.0.0-beta.9 c56cc47a, the
-# release 3.89.13: 3.89.12 with #371, #374, #380, #384 and #385, which carries every fix the
-# branch had picked or contributed since 3.89.11, our fix for OpenCCU-Base #383 included),
-# plus eQ-3's HMIPServer 1.5.2-SNAPSHOT of 2026-11-19 (homematicip/OpenCCU-Base#18) with its
-# HMServer.jar (upstream keeps its HomeMatic-only build) and the fork's README and workflow
-# commits. Until 2.0.0-beta.6 the branch was 3.89.11 plus picks (openccu-lite task 348).
+# OpenCCU-Base 3.89.14 (since 2.0.0-rc.0; 3.89.13 since 2.0.0-beta.9, task 462) from the branch
+# lite of the fork openccu-lite/OpenCCU-Base: upstream's release tag 3.89.14 (44bf79b5: 3.89.13
+# with eQ-3's HMIPServer 1.5.2-SNAPSHOT of 2026-11-19, #399; 3.89.13 carries every fix the branch
+# had picked or contributed since 3.89.11, our fix for OpenCCU-Base #383 included), plus eQ-3's
+# HMServer.jar of that snapshot (homematicip/OpenCCU-Base#18; upstream keeps its HomeMatic-only
+# build) and the fork's README and workflow commits. Until 2.0.0-beta.6 the branch was 3.89.11
+# plus picks (openccu-lite task 348).
 # Back to OpenCCU/OpenCCU-Base at its next tag that has all of them.
 # The version is a tag of the fork: every build round tags the commit of the fork's lite branch
 # it builds with the image version (v1.0.0-<pre>.<N>, annotated) and pins that tag here
 # (task 352); a tag never moves once pushed. The compat version is the release's identity
 # (PRODUCT_VERSION, the recovery's hm-platform; the top Makefile reads both lines) and stays the
-# release while the version is a tag of the fork.
-OPENCCU_BASE_VERSION = v2.0.0-beta.12
-OPENCCU_BASE_COMPAT_VERSION = 3.89.13
+# release while the version is a tag of the fork; LITE-VERSION's BASE is the same release (D-127,
+# lite-version-file-test.sh checks it).
+OPENCCU_BASE_VERSION = v2.0.0-rc.0
+OPENCCU_BASE_COMPAT_VERSION = 3.89.14
 # GitHub's archive of that tag (the recovery's hm-platform downloads OpenCCU-Base's own
 # release archive of the compat version), pruned right after the extract to the paths
 # openccu-base-paths.txt lists: the build sees nothing else, so a file that list does not name

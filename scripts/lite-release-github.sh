@@ -208,7 +208,7 @@ fi
 if [ -z "$ID" ]; then
   OCC_NOTE="occulited [\`${PIN:0:7}\`](https://github.com/openccu-lite/occulited/tree/v$V)"
   body=$(cat <<EOF
-openccu-lite $V: a Homematic CCU firmware without ReGaHSS, built on OpenCCU $BASE, with $OCC_NOTE. **Alpha software** — read the [README](https://github.com/$GH_REPO/blob/$SHA/README.en.md) first.
+openccu-lite $V: a Homematic CCU firmware without ReGaHSS, built on OpenCCU-Base $BASE, with $OCC_NOTE. **Alpha software** — read the [README](https://github.com/$GH_REPO/blob/$SHA/README.en.md) first.
 
 *The maintainer edits this header before publishing.*
 

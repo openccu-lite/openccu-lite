@@ -90,7 +90,7 @@ jobs:
         # /usr/share/rpi-eeprom/ for occulited's Hardware page, upstream's products keep their layout
         run: sh scripts/testcases/lite-rpi-eeprom-offer-test.sh
       - name: /VERSION's lite lines and the three-part firmware version
-        # task 396: VERSION=3.89.11 from BASE=3.89.11.20260919 (as a CCU3 writes it), upstream's
+        # task 396, D-127: VERSION=3.89.14 from BASE=3.89.14, OpenCCU-Base's release (as a CCU3 writes it), upstream's
         # PRODUCT/PLATFORM for every lite product (B-27), VARIANT=lite, LITE=
         run: sh scripts/testcases/lite-version-file-test.sh
       - name: The binaries carry the build's hardening flags
