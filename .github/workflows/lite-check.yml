@@ -57,6 +57,10 @@ jobs:
         # the guard the lite post-build runs: every option of lite.config and lite-systemd.config is
         # in each kernel .config as the fragment says (the io controller for the write accounting too)
         run: sh scripts/testcases/lite-kernel-fragment-guard-test.sh
+      - name: The x86_64 image boots with a BIOS and with UEFI
+        # the guard the lite post-image runs on the finished image (GRUB in the MBR and behind it,
+        # GRUB's EFI binary and the one grub.cfg in bootfs, EFI kernels), and the wiring behind it
+        run: sh scripts/testcases/lite-efi-boot-guard-test.sh
       - name: irqbalance leaves the IRQs alone whose affinity the kernel fixes
         run: sh scripts/testcases/lite-irqbalance-test.sh
       - name: The boot script is the product's boot.cmd

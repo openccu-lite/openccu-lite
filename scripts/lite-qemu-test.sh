@@ -37,6 +37,27 @@
 # JVM a SIGSEGV after boot 1's checks (hs_err, then abort and core, as in B-321): a run that must
 # fail and keep its evidence, to test this path.
 #
+# The firmware and the boot loader (task 480): the image boots with a BIOS and with UEFI, and the
+# -kernel boot above passes both GRUBs by. Four switches cover them:
+#   LITE_QEMU_FIRMWARE=uefi   OVMF instead of SeaBIOS (LITE_QEMU_OVMF_CODE / LITE_QEMU_OVMF_VARS, or
+#                             the ovmf package's 4M files under /usr/share/OVMF). With the -kernel
+#                             boot OVMF starts the kernel through its EFI stub.
+#   LITE_QEMU_BOOT=disk       no -kernel: the firmware starts the image's own GRUB (the MBR's under
+#                             SeaBIOS, EFI/BOOT/BOOTX64.EFI under OVMF), which reads grub.cfg and
+#                             loads the kernel from the rootfs. The test's kernel arguments (the
+#                             debug shell, the evidence drop-in) are appended to default_cmdline in
+#                             the disk copy's grub.cfg (mtools). Each boot checks that the firmware
+#                             is the one asked for (/sys/firmware/efi) and that GRUB loaded the kernel.
+#   LITE_QEMU_RECOVERY=1      (disk boots) at the end: .recoveryMode on the userfs, a reboot, and GRUB
+#                             must start the recovery system - its page answers, and it removed the
+#                             marker. The run ends there.
+#   LITE_QEMU_UPDATE=<zip>    (disk boots) at the end, instead: the release zip is handed to
+#                             `occulited update install --file`, the recovery system installs it and
+#                             the system must come back as the zip's version, under the same firmware,
+#                             with GRUB's EFI binary in bootfs. LITE_QEMU_SWITCH_FIRMWARE=1 then powers
+#                             off and starts the updated disk under the other firmware: an installation
+#                             from before UEFI support boots with UEFI after its update.
+#
 # LITE_QEMU_FRESH=1 is the fresh-image probe of the build rounds (no outbound connection from a
 # fresh image, D-91): boot 1, then ten minutes of the guest's TCP connections to ports 443 and 80
 # and occulited's journal lines about the outside, nothing else. It replaces the runner's
@@ -221,6 +242,7 @@ cleanup() {
   if [ "$EVID" = 1 ]; then evidence_guest; evidence_poweroff; fi
   guest_close 2>/dev/null
   qemu_stop
+  [ -z "${UP_HTTP:-}" ] || kill "$UP_HTTP" 2>/dev/null  # the update phase's file server
   if [ -n "${WORK:-}" ] && [ -d "$WORK" ]; then
     if [ "$rc" != 0 ] && [ -s "$WORK/serial.log" ]; then
       say "last serial output:"; tail -n 60 "$WORK/serial.log" | sed 's/^/  | /'
@@ -239,14 +261,90 @@ trap 'say "interrupted"; exit 130' INT
 trap 'say "terminated"; exit 143' TERM
 cp --sparse=always "$IMG" "$WORK/disk.img" || { say "cannot copy $IMG into $WORK"; exit 1; }
 # a real VM disk is bigger than the image: give the userfs resize room (journald lives there
-# on the systemd product; the image's userfs partition is 3 MB until it grows)
-truncate -s +2G "$WORK/disk.img"
+# on the systemd product; the image's userfs partition is 3 MB until it grows).
+# LITE_QEMU_DISK_GROW=8G for LITE_QEMU_UPDATE: the userfs then holds the zip and its unpacked image
+truncate -s "+${LITE_QEMU_DISK_GROW:-2G}" "$WORK/disk.img"
 
 SYSTEMD=0
 if [ -n "$ROOTFS" ] && "$DEBUGFS" -R 'stat /usr/lib/systemd/systemd' "$ROOTFS" >/dev/null 2>&1; then
   SYSTEMD=1
   "$DEBUGFS" -R "dump /zImage $WORK/zImage" "$ROOTFS" >/dev/null 2>&1 || { say "cannot extract /zImage"; exit 1; }
 fi
+
+# the firmware and the boot loader (see the top)
+FIRMWARE=${LITE_QEMU_FIRMWARE:-bios}
+BOOTVIA=${LITE_QEMU_BOOT:-kernel}
+case "$FIRMWARE" in bios|uefi) ;; *) say "LITE_QEMU_FIRMWARE is bios or uefi, not '$FIRMWARE'"; exit 1;; esac
+case "$BOOTVIA" in kernel|disk) ;; *) say "LITE_QEMU_BOOT is kernel or disk, not '$BOOTVIA'"; exit 1;; esac
+[ "$SYSTEMD" = 1 ] || BOOTVIA=disk  # a busybox image has always booted through its GRUB
+UPDATE_ZIP=${LITE_QEMU_UPDATE:-}
+if [ "${LITE_QEMU_RECOVERY:-0}" = 1 ] || [ -n "$UPDATE_ZIP" ]; then
+  [ "$SYSTEMD" = 1 ] && [ "$BOOTVIA" = disk ] || { say "LITE_QEMU_RECOVERY and LITE_QEMU_UPDATE need LITE_QEMU_BOOT=disk (GRUB chooses the recovery system) and a systemd image"; exit 1; }
+  [ -z "$UPDATE_ZIP" ] || [ -f "$UPDATE_ZIP" ] || { say "LITE_QEMU_UPDATE: $UPDATE_ZIP is not a file"; exit 1; }
+fi
+OVMF_CODE=${LITE_QEMU_OVMF_CODE:-}
+OVMF_VARS=${LITE_QEMU_OVMF_VARS:-}
+ovmf_find() {
+  for c in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2/ovmf/OVMF_CODE.fd /usr/share/edk2/x64/OVMF_CODE.4m.fd; do
+    [ -n "$OVMF_CODE" ] && break
+    [ -f "$c" ] && OVMF_CODE=$c
+  done
+  for c in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd /usr/share/edk2/ovmf/OVMF_VARS.fd /usr/share/edk2/x64/OVMF_VARS.4m.fd; do
+    [ -n "$OVMF_VARS" ] && break
+    [ -f "$c" ] && OVMF_VARS=$c
+  done
+  [ -f "$OVMF_CODE" ] && [ -f "$OVMF_VARS" ] || { say "FAIL: no OVMF firmware here (the ovmf package, or LITE_QEMU_OVMF_CODE and LITE_QEMU_OVMF_VARS)"; exit 1; }
+}
+if [ "$FIRMWARE" = uefi ] || [ "${LITE_QEMU_SWITCH_FIRMWARE:-0}" = 1 ]; then ovmf_find; fi
+# the arguments the test gives the kernel besides the image's own
+TEST_CMDLINE="systemd.debug_shell=ttyS0 $EVID_CMDLINE"
+# grub_patch: a disk boot takes the kernel's arguments from the image's grub.cfg, so the test's are
+# appended to default_cmdline there, in the disk copy (again after an update, which writes a new
+# bootfs). Nothing else of the boot path is touched: the firmware finds GRUB, GRUB its grub.cfg.
+grub_patch() {
+  command -v mcopy >/dev/null 2>&1 || { say "FAIL: LITE_QEMU_BOOT=disk needs mtools (mcopy) to add the test's kernel arguments to the disk copy's grub.cfg"; exit 1; }
+  gp_off=$(part_offset "$WORK/disk.img" 1)
+  [ -n "$gp_off" ] || { say "FAIL: no first partition in the disk copy"; exit 1; }
+  rm -f "$WORK/grub.cfg"
+  MTOOLS_SKIP_CHECK=1 mcopy -i "$WORK/disk.img@@$gp_off" ::boot/grub/grub.cfg "$WORK/grub.cfg" >/dev/null 2>&1 || { say "FAIL: no boot/grub/grub.cfg in the disk copy's bootfs"; exit 1; }
+  grep -q '^default_cmdline=".*"$' "$WORK/grub.cfg" || { say "FAIL: the image's grub.cfg has no default_cmdline line to append the test's arguments to"; exit 1; }
+  grep -qF "systemd.debug_shell=ttyS0" "$WORK/grub.cfg" && return 0
+  sed -i "s|^default_cmdline=\"\(.*\)\"\$|default_cmdline=\"\1 $TEST_CMDLINE\"|" "$WORK/grub.cfg"
+  MTOOLS_SKIP_CHECK=1 mcopy -o -i "$WORK/disk.img@@$gp_off" "$WORK/grub.cfg" ::boot/grub/grub.cfg >/dev/null 2>&1 || { say "FAIL: cannot write grub.cfg back into the disk copy's bootfs"; exit 1; }
+}
+# has_efi_loader: 0 when the disk copy's bootfs holds GRUB's EFI binary
+has_efi_loader() {
+  he_off=$(part_offset "$WORK/disk.img" 1)
+  [ -n "$he_off" ] && MTOOLS_SKIP_CHECK=1 mdir -i "$WORK/disk.img@@$he_off" ::EFI/BOOT/BOOTX64.EFI >/dev/null 2>&1
+}
+if [ "$SYSTEMD" = 1 ] && [ "$BOOTVIA" = disk ]; then
+  grub_patch
+  if [ "$FIRMWARE" = uefi ] && ! has_efi_loader; then say "FAIL: the image's bootfs has no EFI/BOOT/BOOTX64.EFI: it cannot boot with UEFI"; exit 1; fi
+fi
+say "firmware: $FIRMWARE; boot: $BOOTVIA$([ "$BOOTVIA" = disk ] && echo " (the image's own GRUB)")"
+# firmware_check <boot>: the guest runs under the firmware asked for and, in a disk boot, its
+# kernel came from GRUB (which names the image it loaded on the command line)
+firmware_check() {
+  R=$(guest '[ -d /sys/firmware/efi ] && echo fw=uefi || echo fw=bios; cat /proc/cmdline')
+  case "$R" in *"| fw=$FIRMWARE"*) say "$1: the guest runs under $FIRMWARE firmware";; *) fail "$1: the guest does not run under $FIRMWARE firmware: $R";; esac
+  if [ "$BOOTVIA" = disk ]; then
+    case "$R" in *BOOT_IMAGE=/zImage*) say "$1: the kernel was loaded by GRUB";; *) fail "$1: the kernel command line does not name GRUB's BOOT_IMAGE: $R";; esac
+  fi
+}
+# monitor <command>: one command to QEMU's monitor
+monitor() {
+  python3 -c 'import socket, sys, time
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(5); s.connect(sys.argv[1])
+time.sleep(0.5); s.sendall((sys.argv[2] + "\n").encode()); time.sleep(0.5)' "$WORK/monitor.sock" "$1" 2>/dev/null
+}
+# power_off: ACPI's power button, for a guest without the debug shell (after an update the new
+# bootfs has the image's own grub.cfg); QEMU ends with its guest, and is stopped when it does not
+power_off() {
+  monitor system_powerdown
+  for _ in $(seq 1 90); do qemu_alive || return 0; sleep 2; done
+  say "the guest did not power off within 180 s after the power button; stopping QEMU"
+  qemu_stop
+}
 
 # the guest shell: one command line at a time over the serial socket, output until the marker.
 #
@@ -508,21 +606,32 @@ fresh_probe() {
 }
 
 boot() {
+  FW_ARGS=()
+  if [ "$FIRMWARE" = uefi ]; then
+    # the firmware's variables are the VM's own: a copy, kept across this run's boots
+    [ -f "$WORK/ovmf-vars.fd" ] || cp "$OVMF_VARS" "$WORK/ovmf-vars.fd" || { say "cannot copy $OVMF_VARS"; exit 1; }
+    FW_ARGS=(-drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE" -drive "if=pflash,format=raw,file=$WORK/ovmf-vars.fd")
+  fi
+  KERNEL_ARGS=()
+  if [ "$BOOTVIA" = kernel ]; then
+    KERNEL_ARGS=(-kernel "$WORK/zImage"
+      -append "root=PARTUUID=deedbeef-02 rootfstype=ext4 fsck.repair=yes console=tty2 ro rootwait rootdelay=5 init_on_alloc=1 init_on_free=1 slab_nomerge net.ifnames=0 $TEST_CMDLINE")
+  fi
+  rm -f "$WORK/qemu.pid"
   if [ "$SYSTEMD" = 1 ]; then
-    qemu-system-x86_64 -m 2048 -smp 2 -cpu qemu64 \
-      -kernel "$WORK/zImage" \
-      -append "root=PARTUUID=deedbeef-02 rootfstype=ext4 fsck.repair=yes console=tty2 ro rootwait rootdelay=5 init_on_alloc=1 init_on_free=1 slab_nomerge net.ifnames=0 systemd.debug_shell=ttyS0 $EVID_CMDLINE" \
+    qemu-system-x86_64 -m 2048 -smp 2 -cpu qemu64 "${FW_ARGS[@]}" "${KERNEL_ARGS[@]}" \
       -drive file="$WORK/disk.img",format=raw,if=virtio \
       -netdev user,id=n0,hostfwd=tcp:127.0.0.1:$PORT-:80 -device virtio-net-pci,netdev=n0 \
       -display none -chardev socket,id=ser0,path="$WORK/serial.sock",server=on,wait=off -serial chardev:ser0 \
+      -monitor "unix:$WORK/monitor.sock,server=on,wait=off" \
       -pidfile "$WORK/qemu.pid" -daemonize >/dev/null 2>&1 || { say "qemu failed to start"; exit 1; }
   else
-    qemu-system-x86_64 -m 2048 -smp 2 -cpu qemu64 \
+    qemu-system-x86_64 -m 2048 -smp 2 -cpu qemu64 "${FW_ARGS[@]}" \
       -drive file="$WORK/disk.img",format=raw,if=virtio \
       -netdev user,id=n0,hostfwd=tcp:127.0.0.1:$PORT-:80 -device virtio-net-pci,netdev=n0 \
       -display none -serial file:"$WORK/serial.log" -pidfile "$WORK/qemu.pid" -daemonize >/dev/null 2>&1 || { say "qemu failed to start"; exit 1; }
   fi
-  say "$1: booting (TCG, ${WORK}/disk.img is a copy; nothing is written to $IMG)"
+  say "$1: booting ($FIRMWARE, TCG, ${WORK}/disk.img is a copy; nothing is written to $IMG)"
   wait_http "$1"
 }
 
@@ -536,6 +645,103 @@ wait_http() {
   done
   say "$1: after $(( $(date +%s) - T0 )) s: ${H:-no answer}"
   case "$H" in *'"ok":true'*) ;; *) fail "occulited did not answer through lighttpd";; esac
+}
+
+# http_gone: wait until the system's health endpoint stops answering (the guest is going down)
+http_gone() {
+  for _ in $(seq 1 90); do
+    qemu_check "$1"
+    curl -s --max-time 2 "http://127.0.0.1:$PORT/api/system/v1/health" 2>/dev/null | grep -q '"ok":true' || return 0
+    sleep 2
+  done
+  return 1
+}
+# recovery_wait <seconds>: wait for the recovery system's page - its start page, or the running
+# update's output it shows instead. Prints which one.
+recovery_wait() {
+  rw_end=$(( $(date +%s) + $1 ))
+  while [ "$(date +%s)" -lt "$rw_end" ]; do
+    qemu_check "while waiting for the recovery system"
+    rw=$(curl -s --max-time 5 "http://127.0.0.1:$PORT/" 2>/dev/null | head -c 4096 | tr -d '\0')
+    case "$rw" in
+      *'CCU Recovery System'*) echo page; return 0;;
+      *'Displaying running firmware update output'*) echo update; return 0;;
+    esac
+    sleep 5
+  done
+  return 1
+}
+# recovery_phase: the marker GRUB looks for, a reboot, and the recovery system must answer. It
+# removes the marker when it mounts the userfs, which is read from the disk copy afterwards.
+recovery_phase() {
+  say "recovery: .recoveryMode on the userfs and a reboot - GRUB must start the recovery system ($FIRMWARE)"
+  guest 'touch /usr/local/.recoveryMode && sync && systemctl --no-block reboot' >/dev/null
+  guest_close
+  http_gone "during the reboot into the recovery system" || { fail "the system did not go down for the reboot into the recovery system"; return; }
+  T0=$(date +%s)
+  R=$(recovery_wait 600) || { fail "the recovery system did not answer within 600 s (GRUB did not start it, or it did not boot under $FIRMWARE)"; return; }
+  say "recovery: its page answers after $(( $(date +%s) - T0 )) s ($R)"
+  sleep 20  # S11MountAll removes the marker early; the page comes later, this is slack
+  qemu_stop
+  rp_off=$(part_offset "$WORK/disk.img" 3)
+  if ! "$DEBUGFS" -R 'stat /etc' "$WORK/disk.img?offset=$rp_off" 2>/dev/null | grep -q '^Inode:'; then
+    fail "the disk copy's userfs cannot be read after the recovery system ran (debugfs, partition 3)"
+  elif "$DEBUGFS" -R 'stat /.recoveryMode' "$WORK/disk.img?offset=$rp_off" 2>/dev/null | grep -q '^Inode:'; then
+    fail "the recovery system left /usr/local/.recoveryMode behind: it did not mount the userfs"
+  else say "recovery: it removed .recoveryMode from the userfs"; fi
+}
+# update_phase: the release zip through occulited's own command and the recovery system, back as
+# the zip's version under the same firmware; then, when asked, the same disk under the other one
+update_phase() {
+  up_name=$(basename "$UPDATE_ZIP")
+  up_ver=${LITE_QEMU_UPDATE_VERSION:-$(printf '%s\n' "$up_name" | sed -n 's/^openccu-lite-x86_64-ova-\(.*\)\.zip$/\1/p')}
+  [ -n "$up_ver" ] || { fail "LITE_QEMU_UPDATE: no version in the name $up_name (openccu-lite-x86_64-ova-<version>.zip), and no LITE_QEMU_UPDATE_VERSION"; return; }
+  up_port=$((PORT + 1))
+  say "update: $up_name ($(du -h "$UPDATE_ZIP" | cut -f1)) to the guest, from this host's port $up_port"
+  ( cd "$(dirname "$UPDATE_ZIP")" && exec python3 -m http.server --bind 127.0.0.1 "$up_port" >/dev/null 2>&1 ) &
+  UP_HTTP=$!
+  for _ in $(seq 1 20); do curl -s -o /dev/null --max-time 2 "http://127.0.0.1:$up_port/" && break; sleep 1; done
+  R=$(guest "df -m /usr/local | tail -n 1; wget -q -O /usr/local/tmp/$up_name http://10.0.2.2:$up_port/$up_name && echo size=\$(wc -c </usr/local/tmp/$up_name)")
+  kill "$UP_HTTP" 2>/dev/null; UP_HTTP=
+  case "$R" in *"| size=$(stat -c %s "$UPDATE_ZIP")"*) ;; *) fail "the guest did not fetch the update: $R"; return;; esac
+  say "update: occulited update install --file (no backup: a fresh system) - it stages the file, arms the recovery system and reboots"
+  guest "occulited update install --file /usr/local/tmp/$up_name --yes --no-backup >/usr/local/lite-qemu-update.log 2>&1 & echo started" >/dev/null
+  for _ in $(seq 1 60); do
+    R=$(curl -s --max-time 2 "http://127.0.0.1:$PORT/api/system/v1/health" 2>/dev/null)
+    case "$R" in *'"ok":true'*) sleep 5;; *) break;; esac
+  done
+  case "$R" in *'"ok":true'*) fail "the system did not reboot for the update within 5 minutes: $(guest 'tail -n 5 /usr/local/lite-qemu-update.log')"; return;; esac
+  guest_close
+  T0=$(date +%s)
+  R=$(recovery_wait 600) || { fail "the recovery system did not answer within 600 s after the update's reboot (under $FIRMWARE)"; return; }
+  say "update: the recovery system answers after $(( $(date +%s) - T0 )) s ($R); it installs and reboots"
+  # the flash is 2 GB through dd under TCG, then the first boot of the new system
+  H=
+  for _ in $(seq 1 480); do
+    qemu_check "during the update"
+    H=$(curl -s --max-time 3 "http://127.0.0.1:$PORT/api/system/v1/health" 2>/dev/null)
+    case "$H" in *'"ok":true'*) break;; esac
+    sleep 5
+  done
+  say "update: after $(( $(date +%s) - T0 )) s: ${H:-no answer from the updated system}"
+  case "$H" in *'"ok":true'*"\"release\":\"$up_ver\""*) ;; *) fail "the system did not come back as $up_ver after the update"
+    curl -s --max-time 5 "http://127.0.0.1:$PORT/" 2>/dev/null | head -c 2000 | sed 's/<br\/>/\n/g' | tail -n 15 | sed 's/^/  | /'; return;; esac
+  # the new bootfs has the image's own grub.cfg: no debug shell. Off by the power button, the
+  # test's arguments in again, and the checks on the next boot.
+  sleep 60
+  power_off
+  has_efi_loader && say "update: the new bootfs holds EFI/BOOT/BOOTX64.EFI" || fail "after the update bootfs has no EFI/BOOT/BOOTX64.EFI"
+  grub_patch
+  if [ "${LITE_QEMU_SWITCH_FIRMWARE:-0}" = 1 ]; then
+    case "$FIRMWARE" in bios) FIRMWARE=uefi;; *) FIRMWARE=bios;; esac
+    say "update: the updated disk under the other firmware, $FIRMWARE"
+  fi
+  boot "boot after the update"
+  guest_open
+  firmware_check "boot after the update"
+  R=$(guest 'echo "updated: $(grep -E "^(LITE|VERSION)=" /VERSION | tr "\n" " ") bootfs: $(ls /boot/EFI/BOOT/ | tr "\n" " ")"'); say "update: $(printf '%s\n' "$R" | grep -o 'updated: VERSION.*' | tail -n 1)"
+  case "$R" in *"LITE=$up_ver"*) ;; *) fail "/VERSION of the updated system does not say LITE=$up_ver";; esac
+  boot_checks "boot after the update"
 }
 
 boot "boot 1"
@@ -556,6 +762,7 @@ if [ "$SYSTEMD" = 1 ] && [ "$FAILED" = 0 ]; then
   # fifos and GUEST_PID would be created and lost inside it, and the next call would start a
   # second driver against a chardev that serves one client at a time.
   guest_open
+  firmware_check "boot 1"
   if [ "${LITE_QEMU_FRESH:-0}" = 1 ]; then fresh_probe; qemu_check "during the fresh probe"; say "OK (fresh probe)"; exit 0; fi
   # psplash-start.service (buildroot's, not ours) fails here because headless QEMU has no
   # framebuffer; on a box or a VM with a display it does not. occu-interface-clock.service is
@@ -784,6 +991,7 @@ if [ "$SYSTEMD" = 1 ] && [ "$FAILED" = 0 ]; then
   done
   wait_http "boot 2"
   guest_open # again in this shell, not in the first $( ) that follows
+  firmware_check "boot 2"
   say "guest (boot 2): the addon unit came back from the generator at boot, the journal remembers boot 1"
   guest 'systemctl is-system-running; systemctl --failed --no-legend --plain --no-pager; systemctl status addon-litetest.service --no-pager -n0 | sed -n 1,8p; journalctl --list-boots --no-pager; cat /etc/machine-id; cat /usr/local/etc/machine-id; journalctl -b --no-pager -o short-monotonic | grep -m1 "Startup finished"'
   boot_checks "boot 2"
@@ -856,9 +1064,12 @@ if [ "$SYSTEMD" = 1 ] && [ "$FAILED" = 0 ]; then
   # leave the image's userfs as the next test expects it: nothing switched off, no override, the
   # rfd.conf and interface list as the first boot made them
   guest 'sed -i "/^occulite.hmip.adapter=/d" /usr/local/etc/config/crRFD/hmip_user.conf; rm -rf /usr/local/etc/occulite/unit-overrides /usr/local/etc/occulite/unit-switch.json /usr/local/etc/config/InterfacesList.xml; if [ -e /usr/local/etc/config/rfd.conf.lite-qemu-test ]; then mv /usr/local/etc/config/rfd.conf.lite-qemu-test /usr/local/etc/config/rfd.conf; else rm -f /usr/local/etc/config/rfd.conf; fi' >/dev/null
+  # the recovery system through GRUB, and an update through it (see the top)
+  if [ "$FAILED" = 0 ] && [ -n "$UPDATE_ZIP" ]; then update_phase
+  elif [ "$FAILED" = 0 ] && [ "${LITE_QEMU_RECOVERY:-0}" = 1 ]; then recovery_phase; fi
   # B-321: a failed run keeps its evidence first, and then powers off cleanly (the cleanup copies it)
   if [ "$FAILED" != 0 ] && ! only_quota; then evidence_guest; evidence_poweroff
-  else guest 'systemctl --no-block poweroff' >/dev/null; sleep 15; fi
+  elif qemu_alive; then guest 'systemctl --no-block poweroff' >/dev/null; sleep 15; fi
   guest_close
 fi
 

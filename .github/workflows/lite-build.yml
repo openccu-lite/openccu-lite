@@ -72,6 +72,10 @@ jobs:
         # the guard the lite post-build runs: every option of lite.config and lite-systemd.config is
         # in each kernel .config as the fragment says (the io controller for the write accounting too)
         run: sh scripts/testcases/lite-kernel-fragment-guard-test.sh
+      - name: The x86_64 image boots with a BIOS and with UEFI
+        # the guard the lite post-image runs on the finished image (GRUB in the MBR and behind it,
+        # GRUB's EFI binary and the one grub.cfg in bootfs, EFI kernels), and the wiring behind it
+        run: sh scripts/testcases/lite-efi-boot-guard-test.sh
       - name: irqbalance leaves the IRQs alone whose affinity the kernel fixes
         # task 346: lite-irqbalance bans what refuses a write of its own mask; no boot warning per IRQ
         run: sh scripts/testcases/lite-irqbalance-test.sh
@@ -317,6 +321,15 @@ jobs:
         # and the shell through lighttpd - the same test as the release's smoke test. The board
         # images and the CT templates are tested on hardware and on Proxmox.
         run: scripts/lite-qemu-test.sh "build-${{ inputs.product }}/images/sdcard.img" 18090
+      - name: Boot test through the image's own boot loader, BIOS and UEFI (x86_64-ova)
+        if: inputs.product == 'x86_64-ova'
+        # the test above starts the kernel with -kernel and passes GRUB by. Here the firmware starts
+        # the image's GRUB - the MBR's under SeaBIOS, EFI/BOOT/BOOTX64.EFI under OVMF - twice over a
+        # reboot, and then GRUB must start the recovery system for .recoveryMode; without the addon
+        # installs, which the test above has made
+        run: |
+          LITE_QEMU_BOOT=disk LITE_QEMU_RECOVERY=1 LITE_QEMU_ADDONS= scripts/lite-qemu-test.sh "build-${{ inputs.product }}/images/sdcard.img" 18092
+          LITE_QEMU_FIRMWARE=uefi LITE_QEMU_BOOT=disk LITE_QEMU_RECOVERY=1 LITE_QEMU_ADDONS= scripts/lite-qemu-test.sh "build-${{ inputs.product }}/images/sdcard.img" 18094
       - name: Report
         if: always()
         run: |
