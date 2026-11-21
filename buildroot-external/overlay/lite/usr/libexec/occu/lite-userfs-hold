@@ -1,0 +1,45 @@
+#!/bin/sh
+# openccu-lite: runs S03CheckUserFSResize or S04CheckFactoryReset with udev's event queue
+# held, so that systemd never sees the userfs's device vanish while the script rewrites it.
+#
+# The two scripts unmount /usr/local, change the partition (parted resizepart, the MBR's disk
+# signature) or make a new file system on it (mkfs.ext4), and mount it again. udev watches every
+# block device (60-block.rules, OPTIONS+="watch"): when a writer closes the partition, it probes it
+# again, and a probe that falls between mkfs.ext4's wiping and its writing of the new superblock
+# finds no file system and no label - /dev/disk/by-label/userfs is removed and added again a moment
+# later. systemd follows udev, so dev-disk-by\x2dlabel-userfs.device goes away; the userfs's file
+# system check (systemd-fsck@, BindsTo= that device) is stopped, and with it usr-local.mount (which
+# requires the check) and everything that requires the mount - occu-clock-save and the pending
+# starts of occulited-helper and occulited (RequiresMountsFor=/usr/local), which nothing starts
+# again: the first boot of a fresh install with a grown disk came up without occulited, 1 of 3
+# installs on a Proxmox VM.
+#
+# With the queue held, udevd takes the kernel's events and its own watch events but processes none
+# until the script is done; then it processes them against the finished partition, whose file
+# system carries the label again, and the link never goes away. The settle afterwards lets the
+# held events (the first boot's coldplug among them) finish before the units ordered after the
+# script start. The queue is released however the script ends; without udevd (a container) the
+# script runs as it is.
+#
+# Usage: lite-userfs-hold <command> [<argument>...]
+set -u
+UDEVADM=${LITE_UDEVADM:-udevadm}
+
+held=0
+if "$UDEVADM" control --stop-exec-queue 2>/dev/null; then
+  held=1
+fi
+
+release() {
+  [ "$held" = 1 ] || return 0
+  held=0
+  "$UDEVADM" control --start-exec-queue || echo "lite-userfs-hold: udev's event queue could not be released" >&2
+  "$UDEVADM" settle --timeout=60 || echo "lite-userfs-hold: udev did not settle within 60 s" >&2
+}
+trap 'release; exit 143' TERM
+trap 'release; exit 130' INT
+
+"$@"
+rc=$?
+release
+exit "$rc"

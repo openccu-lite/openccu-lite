@@ -23,6 +23,18 @@
 # fresh image, D-91): boot 1, then ten minutes of the guest's TCP connections to ports 443 and 80
 # and occulited's journal lines about the outside, nothing else. It replaces the runner's
 # hand-made copy of this script (dev29b-qemu-fresh.sh), which exited before the cleanup.
+#
+# LITE_QEMU_FIRSTBOOT_RUNS=<n> (B-368) boots the image's first boot <n> times, each from a fresh copy
+# with the grown disk, and nothing else: the userfs resize (S03) and the factory reset (S04) of a
+# fresh image run on every one of them. A run passes when both ran, /usr/local is mounted and
+# occulited, occulited-helper and occu-clock-save are active - and systemd itself never stopped
+# the userfs or its file system check during the boot (PID 1's "Unmounting /usr/local" or "Stopped
+# File System Check"). That was the race: mkfs.ext4 made udev drop /dev/disk/by-label/userfs for a
+# moment, systemd stopped the fsck unit bound to it and with it usr-local.mount and every unit that
+# requires the mount, and the pending starts of occulited-helper and occulited were gone for the
+# boot (1 of 3 installs on a Proxmox VM). It counts the runs that met the race and the runs that
+# lost occulited; any of either fails. Needs a systemd image.
+# LITE_QEMU_FIRSTBOOT_STRESS=1 adds udev probes of the userfs during the factory reset (see there).
 set -u
 IMG=${1:?disk image}
 PORT=${2:-8090}
@@ -393,11 +405,28 @@ fresh_probe() {
   say "FRESH: done"
 }
 
-boot() {
+# LITE_QEMU_FIRSTBOOT_STRESS=1 (with LITE_QEMU_FIRSTBOOT_RUNS, B-368): a test-only drop-in for
+# occu-factory-reset.service, passed as a credential on the kernel's command line, asks udev to
+# probe the userfs partition every 50 ms while the factory reset runs - the probe that, by chance,
+# fell into mkfs.ext4's window on the Proxmox VM. It turns the 1-in-3 race into a near certainty
+# on an image without the fix, and a fixed image must still keep the userfs and occulited. In a
+# unit file $ is $$.
+STRESS_CMDLINE=
+if [ "${LITE_QEMU_FIRSTBOOT_STRESS:-0}" = 1 ]; then
+  STRESS_DROPIN=$(base64 -w0 <<'EOS'
+[Service]
+ExecStartPre=/bin/sh -c 'while :; do echo change >/sys/class/block/vda3/uevent; sleep 0.05; done >/dev/null 2>&1 & echo $$! >/run/lite-qemu-uevent.pid'
+ExecStartPost=-/bin/sh -c 'kill $$(cat /run/lite-qemu-uevent.pid)'
+EOS
+)
+  STRESS_CMDLINE=" systemd.set_credential_binary=systemd.unit-dropin.occu-factory-reset.service~lite-qemu-stress:$STRESS_DROPIN"
+fi
+
+qemu_start() {
   if [ "$SYSTEMD" = 1 ]; then
     qemu-system-x86_64 -m 2048 -smp 2 -cpu qemu64 \
       -kernel "$WORK/zImage" \
-      -append "root=PARTUUID=deedbeef-02 rootfstype=ext4 fsck.repair=yes console=tty2 ro rootwait rootdelay=5 init_on_alloc=1 init_on_free=1 slab_nomerge net.ifnames=0 systemd.debug_shell=ttyS0" \
+      -append "root=PARTUUID=deedbeef-02 rootfstype=ext4 fsck.repair=yes console=tty2 ro rootwait rootdelay=5 init_on_alloc=1 init_on_free=1 slab_nomerge net.ifnames=0 systemd.debug_shell=ttyS0$STRESS_CMDLINE" \
       -drive file="$WORK/disk.img",format=raw,if=virtio \
       -netdev user,id=n0,hostfwd=tcp:127.0.0.1:$PORT-:80 -device virtio-net-pci,netdev=n0 \
       -display none -chardev socket,id=ser0,path="$WORK/serial.sock",server=on,wait=off -serial chardev:ser0 \
@@ -409,6 +438,9 @@ boot() {
       -display none -serial file:"$WORK/serial.log" -pidfile "$WORK/qemu.pid" -daemonize >/dev/null 2>&1 || { say "qemu failed to start"; exit 1; }
   fi
   say "$1: booting (TCG, ${WORK}/disk.img is a copy; nothing is written to $IMG)"
+}
+boot() {
+  qemu_start "$1"
   wait_http "$1"
 }
 
@@ -423,6 +455,48 @@ wait_http() {
   say "$1: after $(( $(date +%s) - T0 )) s: ${H:-no answer}"
   case "$H" in *'"ok":true'*) ;; *) fail "occulited did not answer through lighttpd";; esac
 }
+
+# the first-boot race test (LITE_QEMU_FIRSTBOOT_RUNS, B-368; see the top)
+firstboot_race() {
+  fr_n=$1; fr_bad=0; fr_race=0
+  [ "$SYSTEMD" = 1 ] || { say "FAIL: LITE_QEMU_FIRSTBOOT_RUNS needs a systemd image"; exit 1; }
+  for fr_i in $(seq 1 "$fr_n"); do
+    if [ "$fr_i" -gt 1 ]; then
+      rm -f "$WORK/disk.img" "$WORK/serial.log" "$WORK/serial.sock"
+      cp --sparse=always "$IMG" "$WORK/disk.img" && truncate -s +2G "$WORK/disk.img" || { say "cannot copy $IMG into $WORK"; exit 1; }
+    fi
+    fr_t0=$(date +%s)
+    qemu_start "first boot $fr_i/$fr_n"
+    # lighttpd answering at all (503 without occulited) means the debug shell is long up
+    fr_code=000
+    for _ in $(seq 1 120); do
+      qemu_check "first boot $fr_i: while waiting for HTTP"
+      fr_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:$PORT/" 2>/dev/null)
+      [ "$fr_code" != 000 ] && break
+      sleep 5
+    done
+    [ "$fr_code" != 000 ] || { fail "first boot $fr_i: lighttpd did not answer within 10 minutes"; fr_bad=$((fr_bad+1)); guest_close; qemu_stop; continue; }
+    guest_open
+    # occulited is Type=notify; give a start under way its time
+    R=$(guest 'for i in $(seq 1 60); do [ "$(systemctl is-active occulited)" = activating ] || break; sleep 2; done; echo "occ=$(systemctl is-active occulited) helper=$(systemctl is-active occulited-helper) clock=$(systemctl is-active occu-clock-save) local=$(mountpoint -q /usr/local && echo mounted || echo missing) resize=$(journalctl -b -o cat -u occu-userfs-resize | grep -c resizepart) reset=$(journalctl -b -o cat -u occu-factory-reset | grep -c "cleared, OK") sdumount=$(journalctl -b -o cat _PID=1 | grep -c "^Unmounting /usr/local") fsckstop=$(journalctl -b -o cat _PID=1 | grep -c "^Stopped File System Check") end"')
+    fr_line=$(printf '%s\n' "$R" | grep -o 'occ=.* end' | tail -n 1)
+    fr_ok=1; fr_hit=0
+    case "$fr_line" in *'occ=active helper=active clock=active local=mounted resize=1 reset=1 '*) ;; *) fr_ok=0;; esac
+    case "$fr_line" in *'sdumount=0 fsckstop=0 end') ;; *) fr_hit=1;; esac
+    say "first boot $fr_i/$fr_n after $(( $(date +%s) - fr_t0 )) s: ${fr_line:-no answer from the guest shell}"
+    if [ "$fr_hit" = 1 ]; then fr_race=$((fr_race+1)); say "first boot $fr_i: systemd stopped the userfs during the boot (the race)"; fi
+    if [ "$fr_ok" = 0 ]; then fr_bad=$((fr_bad+1)); say "first boot $fr_i: occulited did not come up, or the resize and factory reset did not both run"; fi
+    if [ "$fr_hit" = 1 ] || [ "$fr_ok" = 0 ]; then
+      guest 'systemctl is-system-running; systemctl --failed --no-legend --plain --no-pager; journalctl -b --no-pager -o short-monotonic | grep -E "S0[34]Check|Unmounting /usr/local|usr-local.mount|File System Check|Stopping|Stopped|occulited" | head -40'
+    fi
+    guest_close
+    qemu_stop
+  done
+  say "first boots: $fr_n, the race met in $fr_race, occulited missing (or the path not taken) in $fr_bad"
+  if [ "$fr_race" != 0 ] || [ "$fr_bad" != 0 ]; then FAILED=1; exit 1; fi
+  say "OK"; exit 0
+}
+[ -z "${LITE_QEMU_FIRSTBOOT_RUNS:-}" ] || firstboot_race "$LITE_QEMU_FIRSTBOOT_RUNS"
 
 boot "boot 1"
 # the HTTP checks the Docker boot test of the dropped OCI product made (task 142, D-94): a fresh

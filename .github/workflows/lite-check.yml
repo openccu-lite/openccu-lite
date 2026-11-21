@@ -80,6 +80,7 @@ jobs:
       - name: The boot order and the boot path
         run: |
           sh scripts/testcases/lite-unit-order-test.sh
+          sh scripts/testcases/lite-userfs-hold-test.sh
           sh scripts/testcases/lite-hb-rf-eth-session-test.sh
           sh scripts/testcases/lite-network-reload-test.sh
           sh scripts/testcases/lite-default-hostname-test.sh
