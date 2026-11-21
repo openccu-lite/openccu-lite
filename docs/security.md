@@ -362,7 +362,9 @@ from outside.
   archives are listed for information: only a new HMIPServer can update them. The rules are in
   `scripts/lite-cve-scan.py`, false positives with their reason in `security/cve-ignore.txt`. Under each CVE the
   report gives the project's assessment in a few words - whether the system is affected, and which setting makes the
-  vulnerability reachable (`security/cve-statements.txt`) - and links the security advisory where one is published;
+  vulnerability reachable (`security/cve-statements.txt`) - and links the security advisory where one is published.
+  A CVE assessed as not affecting the system is not counted and is listed with the excluded matches, its assessment
+  as the reason;
   the same assessments are published as [OpenVEX](https://openccu-lite.github.io/openccu-lite/cve.vex.json) for
   scanners that read it.
 
