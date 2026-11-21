@@ -24,11 +24,13 @@ system, the logging and the radio module detection have been redesigned from the
 ## Focus
 
 - **Stable.** Fewer parts means less that can fail and less to maintain. A high coverage by automated tests, also on
-  real hardware, guards against regressions.
-- **Secure.** Addons and system services run under their own users with restricted rights, ports are closed by
-  default, authentication with passkeys, OAuth and tokens, certificates via ACME, encrypted backups. Programs and addons
-  reach the interface processes through lite-rpc, with API tokens whose scopes set what they may do: read, operate,
-  configure or administer. Details: [Security](docs/security.md).
+  real hardware, safeguards every release.
+- **Secure.** Addons and system services run isolated from each other with restricted rights, and programs get only
+  the rights they need. Security follows a [threat model](docs/threat-model.md), and a daily
+  [CVE report](https://openccu-lite.github.io/openccu-lite/cve-en.html) shows which known vulnerabilities affect the
+  released versions. Vulnerabilities found are published as
+  [security advisories](https://github.com/openccu-lite/openccu-lite/security/advisories) with mitigations. Details:
+  [Security](docs/security.md).
 - **Private.** No telemetry. In the [local key mode](docs/lokaler-schluesselmodus.md) a central unit can run without an
   internet connection and without depending on eQ-3's key server; other outgoing connections (update checks) happen
   only with the user's consent. Details: [Privacy](docs/privacy.md).
@@ -98,9 +100,12 @@ described in [Addons](docs/addons.md).
 The releases are at [github.com/openccu-lite/openccu-lite/releases](https://github.com/openccu-lite/openccu-lite/releases).
 
 - **Raspberry Pi 3/4:** unpack the release's `.zip` and write the `.img` inside it to the SD card.
-- **Virtual machine:** import the `.ova` (Proxmox, VMware, VirtualBox and so on).
+- **Virtual machine:** import the `.ova` (Proxmox, VMware, VirtualBox and so on). The image boots with a BIOS, which
+  is what the `.ova` sets up, and with UEFI; for UEFI, switch Secure Boot off (the boot loader is not signed). An
+  existing VM can be switched to UEFI once it runs a version that supports it: an update brings the UEFI boot
+  loader along.
 - **Proxmox by script:** as root on the Proxmox VE host, a script creates the VM in one step (`--help` lists the
-  options):
+  options; `--bios ovmf` creates it with UEFI instead of SeaBIOS):
   `bash -c "$(wget -qLO - https://raw.githubusercontent.com/openccu-lite/openccu-lite/main/scripts/install-proxmox.sh)"`
 
 ## Switching from (Open)CCU to openccu-lite

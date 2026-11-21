@@ -24,11 +24,13 @@ die Funkmodulerkennung wurden von Grund auf neu gestaltet.
 ## Schwerpunkte
 
 - **Stabil.** Weniger Bestandteile heißt weniger, was ausfallen kann und gepflegt werden muss. Eine hohe Abdeckung
-  durch automatisierte Tests, auch auf echter Hardware, schützt vor Regressionsfehlern.
-- **Sicher.** Addons und Systemdienste laufen unter eigenen Benutzern mit eingeschränkten Rechten, Ports sind
-  standardmäßig geschlossen, Authentifizierung mit Passkeys, OAuth und Tokens, Zertifikate per ACME, verschlüsselte
-  Sicherungen. Programme und Addons sprechen die Schnittstellenprozesse über lite-rpc an, mit API-Tokens, deren Scopes
-  festlegen, was sie dürfen: lesen, bedienen, konfigurieren oder verwalten. Details: [Sicherheit](docs/security.md).
+  durch automatisierte Tests, auch auf echter Hardware, sichert jedes Release ab.
+- **Sicher.** Addons und Systemdienste laufen voneinander abgeschottet mit eingeschränkten Rechten, und Programme
+  bekommen nur die Rechte, die sie brauchen. Die Sicherheit folgt einem [Bedrohungsmodell](docs/threat-model.md), und
+  ein täglicher [CVE-Bericht](https://openccu-lite.github.io/openccu-lite/cve.html) zeigt, welche bekannten
+  Schwachstellen die veröffentlichten Versionen betreffen. Gefundene Lücken stehen als
+  [Security Advisories](https://github.com/openccu-lite/openccu-lite/security/advisories) mit Abhilfe bereit.
+  Details: [Sicherheit](docs/security.md).
 - **Privat.** Keine Telemetrie. Im [lokalen Schlüsselmodus](docs/lokaler-schluesselmodus.md) lässt sich eine Zentrale
   auch ohne Internetverbindung und ohne Abhängigkeit vom Schlüsselserver von eQ-3 betreiben, sonstige ausgehende
   Verbindungen (Update-Checks) gibt es nur mit Zustimmung des Benutzers. Details: [Datenschutz](docs/privacy.md).
@@ -101,9 +103,12 @@ anpassen lässt, steht unter [Addons](docs/addons.md).
 Die Releases liegen unter [github.com/openccu-lite/openccu-lite/releases](https://github.com/openccu-lite/openccu-lite/releases).
 
 - **Raspberry Pi 3/4:** die `.zip` des Releases entpacken und die `.img` darin auf die SD-Karte schreiben.
-- **Virtuelle Maschine:** die `.ova` importieren (Proxmox, VMware, VirtualBox usw.).
+- **Virtuelle Maschine:** die `.ova` importieren (Proxmox, VMware, VirtualBox usw.). Das Image startet mit BIOS, so
+  richtet die `.ova` die VM ein, und mit UEFI; für UEFI Secure Boot ausschalten (der Bootloader ist nicht signiert).
+  Eine bestehende VM lässt sich auf UEFI umstellen, sobald sie eine Version mit UEFI-Unterstützung hat: ein Update
+  bringt den UEFI-Bootloader mit.
 - **Proxmox per Skript:** als root auf dem Proxmox-VE-Host legt ein Skript die VM in einem Schritt an (`--help` zeigt
-  die Optionen):
+  die Optionen; `--bios ovmf` legt sie mit UEFI statt SeaBIOS an):
   `bash -c "$(wget -qLO - https://raw.githubusercontent.com/openccu-lite/openccu-lite/main/scripts/install-proxmox.sh)"`
 
 ## Wechsel von (Open)CCU zu openccu-lite

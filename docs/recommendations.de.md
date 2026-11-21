@@ -1,7 +1,7 @@
 # Empfehlungen
 
-Was sich im Betrieb von openccu-lite bewährt hat: die Hardware, der Funk, der Schlüssel des HmIP-Netzes und die
-Sicherungen.
+Was sich im Betrieb von openccu-lite bewährt hat: die Hardware, VM oder eigene Hardware, der Funk, ungenutzte
+Funkstandards, der Schlüssel des HmIP-Netzes und die Sicherungen.
 
 ## Hardware
 
@@ -13,14 +13,48 @@ wenigsten.
 * Gute Erfahrungen mit einem **PoE-Splitter**, ähnlich z. B. [dieser](https://de.aliexpress.com/item/1005008712707676.html). 
 * **Gehäuse** für Pi und RPI-RF-MOD [„Raspberrymatic CCU3 Case Upgrade RPI-RF-MOD“](https://www.thingiverse.com/thing:4146052) von raabi91 und moclub.
 
+## Virtuelle Maschine oder eigene Hardware
+
+**Empfehlung: für ein Produktivsystem eigene Hardware statt einer VM.** openccu-lite gibt es als VM-Image (OVA), und
+dieses Image wird unterstützt: Es wird vor jeder Veröffentlichung getestet, und Fehler darin werden behoben. Viele
+betreiben ihre Zentrale so, und zwar erfolgreich und stabil. Für ein System, auf das sich das Haus verlässt, ist der
+Betrieb auf eigener Hardware aber die ruhigere Wahl:
+
+* **Der Funk ist zeitkritisch.** Auf einer CCU3 oder einem Charly hängt das Funkmodul direkt an der seriellen
+  Schnittstelle des Systems. In einer VM liegen dazwischen der Hypervisor und je nach Funkmodul USB-Durchreichung oder
+  das Netzwerk zu einem HB-RF-ETH. Jede dieser Schichten kann kurz hängen, etwa wenn der Host ausgelastet ist, ein
+  Backup läuft oder ein USB-Gerät kurz verschwindet. Bei BidCos bleibt für die Bestätigung eines Telegramms nur ein
+  Zeitfenster von Millisekunden. Was zu spät kommt, wiederholt das Gerät oder meldet es als nicht erreichbar.
+* **Strom und Standort sprechen nicht für die VM.** Wer die VM mit einem HB-RF-ETH betreibt, hat ohnehin ein eigenes
+  Gerät mit Funkmodul im Haus. An dessen Stelle kann genauso gut ein Raspberry Pi 3 B mit RPI-RF-MOD stehen, also die
+  ganze Zentrale. Der Unterschied im Stromverbrauch ist aus meiner Sicht nicht wesentlich, und der Ort, der für den Funk
+  günstig ist, bleibt derselbe.
+
+Wer trotzdem eine VM betreibt: das Funkmodul möglichst per Netzwerk (HB-RF-ETH) oder per USB fest durchgereicht
+anbinden und der VM eigene CPU-Anteile geben.
+
 ## Funk
 
-**Empfehlung: HmIP und BidCos trennen.** Das RPI-RF-MOD bedient nur HmIP (direkt, ohne multimacd), BidCos läuft über ein
-zweites Funkmodul, via USB oder Netzwerk. So hat jeder Funkstandard sein eigenes Modul und seinen eigenen Duty Cycle. Wer kein
-BidCos-Gerät hat, schaltet BidCos-RF ab: Schnittstellen → BidCos-RF → „Aus (nur HmIP)“ – das RPI-RF-MOD bedient dann
-nur HmIP. Umgekehrt schaltet HmIP-RF → „Keins (nur virtuelle Geräte)“ HmIP ab, wenn es kein HmIP-Gerät gibt: hmipserver
-läuft dann als HMServer.jar mit etwa halb so viel Speicher. Ohne HmIP-Funkmodul ist das nötig, denn HMIPServer.jar
-startet ohne sein Modul nicht. Alle Einstellungen: [radio.md](radio.md).
+**Bei vielen Geräten: HmIP und BidCos auf getrennte Funkmodule legen.** Standardmäßig bedient das RPI-RF-MOD beide
+Funkstandards, und die teilen sich dann seinen Duty Cycle. Das reicht für die meisten Installationen. Wer viele Geräte
+hat und merkt, dass der Duty Cycle zum Problem wird, gibt BidCos ein zweites Funkmodul. Dann hat jeder Funkstandard
+sein eigenes Modul und seinen eigenen Duty Cycle, und das RPI-RF-MOD bedient HmIP direkt, ohne multimacd.
+
+Das ist ein Kompromiss: Das zweite Funkmodul hängt wieder per USB oder Netzwerk am System, mit genau den Schichten, die
+der Abschnitt oben bei der VM nennt. Für BidCos empfehle ich ein **HM-MOD-RPI-PCB** auf einem **HB-RF-USB** (USB) oder
+**HB-RF-ETH** (Netzwerk). Vorhandene HM-LGW-O-TW-W-EU (Funk-LAN-Gateway) oder HM-CFG-USB-2 (mit der Firmware von
+Michael Gernoth) funktionieren ebenso, sind aber nur noch gebraucht zu bekommen.
+
+## Ungenutztes Funkprotokoll abschalten
+
+**Empfehlung: einen Funkstandard, den keines der Geräte nutzt, abschalten.** Wer kein BidCos-Gerät hat, stellt
+*Schnittstellen → BidCos-RF* auf „Aus (nur HmIP)“. Das RPI-RF-MOD bedient dann nur HmIP, und multimacd fällt weg:
+hmipserver spricht das Funkmodul direkt an, eine Schicht weniger, die Fehler einführen könnte. (Ein HM-MOD-RPI-PCB
+braucht multimacd auch für HmIP allein.)
+
+Umgekehrt schaltet *HmIP-RF* → „Keins (nur virtuelle Geräte)“ HmIP ab, wenn es kein HmIP-Gerät gibt: hmipserver läuft
+dann als HMServer.jar mit etwa halb so viel Speicher. Ohne HmIP-Funkmodul ist das nötig, denn HMIPServer.jar startet
+ohne sein Modul nicht. Alle Einstellungen: [radio.md](radio.md).
 
 ## Lokaler Schlüsselmodus
 

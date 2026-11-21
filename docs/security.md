@@ -4,7 +4,8 @@ How openccu-lite protects the system, what it leaves to you, and what is known t
 [threat-model.md](threat-model.md) — the assets, the attackers, the trust boundaries and the accepted risks, with the
 mechanisms at each boundary in detail; [security-asvs.md](security-asvs.md) — the code against OWASP ASVS 5.0
 Level 2, row by row; [security-en303645.md](security-en303645.md) — the product against ETSI EN 303 645. Reporting a
-vulnerability: [SECURITY.md](../SECURITY.md). The API's routes, scopes and files are in occulited's
+vulnerability: [SECURITY.md](../SECURITY.md); published advisories:
+[github.com/openccu-lite/openccu-lite/security/advisories](https://github.com/openccu-lite/openccu-lite/security/advisories). The API's routes, scopes and files are in occulited's
 [system-api.md](https://github.com/openccu-lite/occulited/blob/master/docs/system-api.md) and
 [config.md](https://github.com/openccu-lite/occulited/blob/master/docs/config.md).
 
@@ -28,8 +29,10 @@ vulnerability: [SECURITY.md](../SECURITY.md). The API's routes, scopes and files
 
 **What protects the system:**
 
-- **One door.** lighttpd is the only program the system runs that listens on the LAN (80, 443). occulited and the
-  interface daemons listen on the loopback. SSH and the CCU's classic RPC ports exist only while you switch them on.
+- **One door.** lighttpd is the only program the system runs that listens on the LAN (80, 443), with one exception:
+  while HmIP-RF runs, hmipserver serves the HmIP access points (HAP, DRAP) on tcp 9293 and 9294 and udp 43438, and
+  the firewall opens these for the local networks only. occulited and the interface daemons' RPC ports listen on the
+  loopback. SSH and the CCU's classic RPC ports exist only while you switch them on.
 - **A firewall that drops by default.** A port no rule accepts is closed, whatever listens on it. Each feature that
   needs a port adds its own rule and removes it again.
 - **A login on everything.** Accounts with argon2id password hashes, a lockout after repeated failures, optional
@@ -48,6 +51,7 @@ vulnerability: [SECURITY.md](../SECURITY.md). The API's routes, scopes and files
 | Web server | HTTP, and HTTPS with a self-signed certificate; the HTTPS redirect and HSTS are off |
 | Firewall | policy DROP (IPv4 and IPv6); the web server from the local networks only |
 | SSH | off |
+| HmIP access points (tcp 9293, 9294, udp 43438) | open for the local networks while HmIP-RF runs, whether or not an access point is paired; the access point list says whether the ports can be closed or must stay open |
 | Classic RPC (2001, 2010, 9292, 2000) | off; switched on without a login after a switch from OpenCCU whose firewall opened the XMLRPC ports, or after an import of an OpenCCU backup with that option ticked ([switching.md](switching.md#what-changes-on-the-first-start)) |
 | The Control app's public mode | off |
 | Client pairing | on, for programs on the local networks; every request needs an administrator's approval |
@@ -81,6 +85,7 @@ interface daemons' RPC ports on the loopback have no authentication.
 | lighttpd | the LAN, 80/443 | browsers, programs with a token |
 | `occulited` | `127.0.0.1:8183` only; it refuses any other listen address | lighttpd (proxy), programs on the system |
 | `rfd`, `hs485d`, `hmipserver` | the loopback: `Listen IP = 127.0.0.1` in `rfd.conf`, `Legacy.BindAddress=127.0.0.1` in `crRFD.conf` (the fork's config templates) | occulited, addons on the system |
+| `hmipserver`, the HmIP access points | the LAN, tcp 9293 and 9294 (its update servers, plain HTTP) and udp 43438, while HmIP-RF runs; the firewall opens them for the local networks only | HmIP-HAP, HmIPW-DRAP |
 | sshd | the LAN, 22, only while SSH is switched on; the firewall opens it for the local networks only | the administrator |
 | lighttpd, classic RPC | the LAN, 2001/2010/9292/2000 (plain) and 42001/42010/49292/42000 (TLS), only while switched on | CCU clients off the system |
 | lighttpd, an addon's web ingress | the Unix socket `/run/lighttpd-addons/<id>/proxy.sock` (PROXY protocol), one per addon whose manifest declares `runtime.web_ingress` | that addon alone |
@@ -207,8 +212,11 @@ breached passwords ([security-asvs.md](security-asvs.md) V6.2 says why).
 
 - **The firewall** is one list of INPUT rules with policy DROP in both families. Features own their rules (the web
   server, SSH, classic RPC, the HmIP access points, the network discovery, an addon's opened port) and add or remove
-  them with the feature; the web server, SSH and classic RPC are from `local networks` only (classic RPC converted
-  or imported from OpenCCU keeps OpenCCU's sources). Every rule is editable. A
+  them with the feature; the web server, SSH, classic RPC and the HmIP access points are from `local networks` only
+  (classic RPC converted or imported from OpenCCU keeps OpenCCU's sources). Up to 1.2.4 and 2.0.0-beta.11 the access
+  point rules were from every address; the update to 2.0.0-beta.12 or later changes those still at that default to
+  `local networks` once, and keeps a source you set yourself. The access point list (HmIP-RF) tells from the rules
+  whether a paired access point is blocked, or whether the ports can be closed when none is paired. Every rule is editable. A
   change from the page reverts after 60 seconds unless confirmed, so a rule that locks you out undoes itself. The
   rules load before the network comes up and apply to Ethernet and Wi-Fi alike. A system that comes from OpenCCU
   converts its `firewall.conf` once. The Firewall page lists every listening socket with the rule that covers it, or
@@ -352,7 +360,11 @@ from outside.
   the Java runtime, and for sshd, OpenSSL and glibc without authentication) - for the latest release, the newest
   pre-release and the previous stable release, with what a release fixed. The libraries inside eQ-3's Java
   archives are listed for information: only a new HMIPServer can update them. The rules are in
-  `scripts/lite-cve-scan.py`, false positives with their reason in `security/cve-ignore.txt`.
+  `scripts/lite-cve-scan.py`, false positives with their reason in `security/cve-ignore.txt`. Under each CVE the
+  report gives the project's assessment in a few words - whether the system is affected, and which setting makes the
+  vulnerability reachable (`security/cve-statements.txt`) - and links the security advisory where one is published;
+  the same assessments are published as [OpenVEX](https://openccu-lite.github.io/openccu-lite/cve.vex.json) for
+  scanners that read it.
 
 ## Backups
 
