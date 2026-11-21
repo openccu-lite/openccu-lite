@@ -106,7 +106,9 @@ Die Releases liegen unter [github.com/openccu-lite/openccu-lite/releases](https:
 - **Virtuelle Maschine:** die `.ova` importieren (Proxmox, VMware, VirtualBox usw.). Das Image startet mit BIOS, so
   richtet die `.ova` die VM ein, und mit UEFI; für UEFI Secure Boot ausschalten (der Bootloader ist nicht signiert).
   Eine bestehende VM lässt sich auf UEFI umstellen, sobald sie eine Version mit UEFI-Unterstützung hat: ein Update
-  bringt den UEFI-Bootloader mit.
+  bringt den UEFI-Bootloader mit. Unter Proxmox belässt `qm importovf` die Disk bei der Größe des Images, mit kaum
+  Platz für Daten: vor dem ersten Start vergrößern, z. B. `qm resize <vmid> sata0 8G` (die Datenpartition übernimmt
+  den Platz beim nächsten Start), oder die VM mit dem Skript unten anlegen, das das erledigt.
 - **Proxmox per Skript:** als root auf dem Proxmox-VE-Host legt ein Skript die VM in einem Schritt an (`--help` zeigt
   die Optionen; `--bios ovmf` legt sie mit UEFI statt SeaBIOS an):
   `bash -c "$(wget -qLO - https://raw.githubusercontent.com/openccu-lite/openccu-lite/main/scripts/install-proxmox.sh)"`
