@@ -58,6 +58,18 @@
 #                             off and starts the updated disk under the other firmware: an installation
 #                             from before UEFI support boots with UEFI after its update.
 #
+# LITE_QEMU_FIRSTBOOT_RUNS=<n> (B-368) boots the image's first boot <n> times, each from a fresh copy
+# with the grown disk, and nothing else: the userfs resize (S03) and the factory reset (S04) of a
+# fresh image run on every one of them. A run passes when both ran, /usr/local is mounted and
+# occulited, occulited-helper and occu-clock-save are active - and systemd itself never stopped
+# the userfs or its file system check during the boot (PID 1's "Unmounting /usr/local" or "Stopped
+# File System Check"). That was the race: mkfs.ext4 made udev drop /dev/disk/by-label/userfs for a
+# moment, systemd stopped the fsck unit bound to it and with it usr-local.mount and every unit that
+# requires the mount, and the pending starts of occulited-helper and occulited were gone for the
+# boot (1 of 3 installs on a Proxmox VM). It counts the runs that met the race and the runs that
+# lost occulited; any of either fails. Combines with LITE_QEMU_FIRMWARE and LITE_QEMU_BOOT.
+# LITE_QEMU_FIRSTBOOT_STRESS=1 adds udev probes of the userfs during the factory reset (see there).
+#
 # LITE_QEMU_FRESH=1 is the fresh-image probe of the build rounds (no outbound connection from a
 # fresh image, D-91): boot 1, then ten minutes of the guest's TCP connections to ports 443 and 80
 # and occulited's journal lines about the outside, nothing else. It replaces the runner's
@@ -298,6 +310,21 @@ ovmf_find() {
 if [ "$FIRMWARE" = uefi ] || [ "${LITE_QEMU_SWITCH_FIRMWARE:-0}" = 1 ]; then ovmf_find; fi
 # the arguments the test gives the kernel besides the image's own
 TEST_CMDLINE="systemd.debug_shell=ttyS0 $EVID_CMDLINE"
+# LITE_QEMU_FIRSTBOOT_STRESS=1 (with LITE_QEMU_FIRSTBOOT_RUNS, B-368): a test-only drop-in for
+# occu-factory-reset.service, as a credential like the evidence one, asks udev to probe the userfs
+# partition every 50 ms while the factory reset runs - the probe that, by chance, fell into
+# mkfs.ext4's window on the Proxmox VM. It turns the 1-in-3 race into a near certainty on an
+# image without the fix, and a fixed image must still keep the userfs and occulited. In a unit
+# file $ is $$.
+if [ "${LITE_QEMU_FIRSTBOOT_STRESS:-0}" = 1 ]; then
+  STRESS_DROPIN=$(base64 -w0 <<'EOS'
+[Service]
+ExecStartPre=/bin/sh -c 'while :; do echo change >/sys/class/block/vda3/uevent; sleep 0.05; done >/dev/null 2>&1 & echo $$! >/run/lite-qemu-uevent.pid'
+ExecStartPost=-/bin/sh -c 'kill $$(cat /run/lite-qemu-uevent.pid)'
+EOS
+)
+  TEST_CMDLINE="$TEST_CMDLINE systemd.set_credential_binary=systemd.unit-dropin.occu-factory-reset.service~lite-qemu-stress:$STRESS_DROPIN"
+fi
 # grub_patch: a disk boot takes the kernel's arguments from the image's grub.cfg, so the test's are
 # appended to default_cmdline there, in the disk copy (again after an update, which writes a new
 # bootfs). Nothing else of the boot path is touched: the firmware finds GRUB, GRUB its grub.cfg.
@@ -605,7 +632,7 @@ fresh_probe() {
   say "FRESH: done"
 }
 
-boot() {
+qemu_start() {
   FW_ARGS=()
   if [ "$FIRMWARE" = uefi ]; then
     # the firmware's variables are the VM's own: a copy, kept across this run's boots
@@ -632,6 +659,9 @@ boot() {
       -display none -serial file:"$WORK/serial.log" -pidfile "$WORK/qemu.pid" -daemonize >/dev/null 2>&1 || { say "qemu failed to start"; exit 1; }
   fi
   say "$1: booting ($FIRMWARE, TCG, ${WORK}/disk.img is a copy; nothing is written to $IMG)"
+}
+boot() {
+  qemu_start "$1"
   wait_http "$1"
 }
 
@@ -743,6 +773,50 @@ update_phase() {
   case "$R" in *"LITE=$up_ver"*) ;; *) fail "/VERSION of the updated system does not say LITE=$up_ver";; esac
   boot_checks "boot after the update"
 }
+
+# the first-boot race test (LITE_QEMU_FIRSTBOOT_RUNS, B-368; see the top)
+firstboot_race() {
+  fr_n=$1; fr_bad=0; fr_race=0
+  [ "$SYSTEMD" = 1 ] || { say "FAIL: LITE_QEMU_FIRSTBOOT_RUNS needs a systemd image"; exit 1; }
+  EVID_DONE=1  # each run is judged here; the evidence of the last disk copy would say nothing more
+  for fr_i in $(seq 1 "$fr_n"); do
+    if [ "$fr_i" -gt 1 ]; then
+      rm -f "$WORK/disk.img" "$WORK/ovmf-vars.fd" "$WORK/serial.log"
+      cp --sparse=always "$IMG" "$WORK/disk.img" && truncate -s "+${LITE_QEMU_DISK_GROW:-2G}" "$WORK/disk.img" || { say "cannot copy $IMG into $WORK"; exit 1; }
+      [ "$BOOTVIA" = disk ] && grub_patch
+    fi
+    fr_t0=$(date +%s)
+    qemu_start "first boot $fr_i/$fr_n"
+    # lighttpd answering at all (503 without occulited) means the debug shell is long up
+    fr_code=000
+    for _ in $(seq 1 120); do
+      qemu_check "first boot $fr_i: while waiting for HTTP"
+      fr_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://127.0.0.1:$PORT/" 2>/dev/null)
+      [ "$fr_code" != 000 ] && break
+      sleep 5
+    done
+    [ "$fr_code" != 000 ] || { fail "first boot $fr_i: lighttpd did not answer within 10 minutes"; fr_bad=$((fr_bad+1)); guest_close; qemu_stop; continue; }
+    guest_open
+    # occulited is Type=notify; give a start under way its time
+    R=$(guest 'for i in $(seq 1 60); do [ "$(systemctl is-active occulited)" = activating ] || break; sleep 2; done; echo "occ=$(systemctl is-active occulited) helper=$(systemctl is-active occulited-helper) clock=$(systemctl is-active occu-clock-save) local=$(mountpoint -q /usr/local && echo mounted || echo missing) resize=$(journalctl -b -o cat -u occu-userfs-resize | grep -c resizepart) reset=$(journalctl -b -o cat -u occu-factory-reset | grep -c "cleared, OK") sdumount=$(journalctl -b -o cat _PID=1 | grep -c "^Unmounting /usr/local") fsckstop=$(journalctl -b -o cat _PID=1 | grep -c "^Stopped File System Check") end"')
+    fr_line=$(printf '%s\n' "$R" | grep -o 'occ=.* end' | tail -n 1)
+    fr_ok=1; fr_hit=0
+    case "$fr_line" in *'occ=active helper=active clock=active local=mounted resize=1 reset=1 '*) ;; *) fr_ok=0;; esac
+    case "$fr_line" in *'sdumount=0 fsckstop=0 end') ;; *) fr_hit=1;; esac
+    say "first boot $fr_i/$fr_n after $(( $(date +%s) - fr_t0 )) s: ${fr_line:-no answer from the guest shell}"
+    if [ "$fr_hit" = 1 ]; then fr_race=$((fr_race+1)); say "first boot $fr_i: systemd stopped the userfs during the boot (the race)"; fi
+    if [ "$fr_ok" = 0 ]; then fr_bad=$((fr_bad+1)); say "first boot $fr_i: occulited did not come up, or the resize and factory reset did not both run"; fi
+    if [ "$fr_hit" = 1 ] || [ "$fr_ok" = 0 ]; then
+      guest 'systemctl is-system-running; systemctl --failed --no-legend --plain --no-pager; journalctl -b --no-pager -o short-monotonic | grep -E "S0[34]Check|Unmounting /usr/local|usr-local.mount|File System Check|Stopping|Stopped|occulited" | head -40'
+    fi
+    guest_close
+    qemu_stop
+  done
+  say "first boots: $fr_n, the race met in $fr_race, occulited missing (or the path not taken) in $fr_bad ($FIRMWARE, boot via $BOOTVIA)"
+  if [ "$fr_race" != 0 ] || [ "$fr_bad" != 0 ]; then FAILED=1; exit 1; fi
+  say "OK"; exit 0
+}
+[ -z "${LITE_QEMU_FIRSTBOOT_RUNS:-}" ] || firstboot_race "$LITE_QEMU_FIRSTBOOT_RUNS"
 
 boot "boot 1"
 # the HTTP checks the Docker boot test of the dropped OCI product made (task 142, D-94): a fresh

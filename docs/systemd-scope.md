@@ -173,8 +173,8 @@ setup scripts, the fourth for every daemon the system needs (B-3,
 | `occu-zram-swap.service` | `S01InitZRAMSwap` | compat | |
 | `occu-usb-gadget.service` | `S01USBGadgetMode` | compat | ARM only and only with the flag file: `ConditionVirtualization=no`, `ConditionPathExists=/etc/config/usbGadgetModeEnabled` (D-41) |
 | `occu-init-rtc.service` | `S02InitRTC` | compat | after `occu-init-host` only (task 135) |
-| `occu-userfs-resize.service` | `S03CheckUserFSResize` | compat | unmounts and remounts `/usr/local`; every lite unit orders with `After=` only, never `Requires=`, so nothing is stopped by that |
-| `occu-factory-reset.service` | `S04CheckFactoryReset` | compat | |
+| `occu-userfs-resize.service` | `S03CheckUserFSResize` | compat | unmounts and remounts `/usr/local`; every lite unit orders with `After=` only, never `Requires=`, so nothing is stopped by that; runs with udev's event queue held (`lite-userfs-hold`, B-368) |
+| `occu-factory-reset.service` | `S04CheckFactoryReset` | compat | `mkfs.ext4` under `lite-userfs-hold` (B-368): udev's probe between the wipe and the new superblock dropped `/dev/disk/by-label/userfs`, systemd stopped the userfs's fsck unit (`BindsTo=` the device), `usr-local.mount` and everything requiring it |
 | `occu-backup-restore.service` | `S05CheckBackupRestore` | compat | |
 | `occu-seedrng.service` | `S05seedrng` | compat | the stop action writes the seed back |
 | `occu-machine-id.service` | — | oneshot, `Before=systemd-journald.service` | installs the stored ID before journald reads one, see [The machine ID](#the-machine-id) |
@@ -265,6 +265,12 @@ so every step waited for every earlier one (on the Charly the web UI answered at
 
 Ordering only — `Requires=` is never used between lite units, because `S03`/`S04` unmount
 `/usr/local` and a `Requires=` on that mount would stop everything before them.
+The units that need the userfs mounted (`RequiresMountsFor=/usr/local`: occulited-helper, so
+occulited, `occu-clock-save` and others) are safe from the unmount itself, which systemd only
+notices, but not from a stop of `usr-local.mount`: the fstab mount requires the userfs's
+`systemd-fsck@` unit, which is bound to `/dev/disk/by-label/userfs`. So S03 and S04 run with udev's
+event queue held (`lite-userfs-hold`): the link never goes away while they rewrite the partition
+(B-368).
 
 Two things the scripts got from busybox init that systemd does not give by itself: the umask
 (`rcS` set 0002; every unit sets `UMask=0002`) and the environment of the addon scripts
