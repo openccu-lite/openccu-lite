@@ -119,6 +119,9 @@ jobs:
       - name: The SBOM lists the libraries inside the JARs
         # B-360: OpenCCU-Base 2.0's JARs carry no third-party list; lite-sbom.py reads their Maven metadata
         run: sh scripts/testcases/lite-sbom-jar-test.sh
+      - name: The SBOM carries Buildroot's ignored CVEs
+        # task 483: <PKG>_IGNORE_CVES as vulnerabilities, resolved_with_pedigree where a patch names the CVE
+        run: sh scripts/testcases/lite-sbom-cve-test.sh
       - name: The piVCCU packages' bump helpers pin the fork
         # B-330: update-generic_raw_uart.sh and update-detect_radio_module.sh pin the piVCCU fork's
         # tag or a commit on its lite (never a branch, never Alex's master), the hash from two equal

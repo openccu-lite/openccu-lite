@@ -360,7 +360,9 @@ from outside.
   the Java runtime, and for sshd, OpenSSL and glibc without authentication) - for the latest release, the newest
   pre-release and the previous stable release, with what a release fixed. The libraries inside eQ-3's Java
   archives are listed for information: only a new HMIPServer can update them. The rules are in
-  `scripts/lite-cve-scan.py`, false positives with their reason in `security/cve-ignore.txt`. Under each CVE the
+  `scripts/lite-cve-scan.py`, false positives with their reason in `security/cve-ignore.txt`. A fix Buildroot
+  backports as a patch leaves the version as it was: the SBOM lists the CVEs Buildroot marks as fixed or not applying
+  to a package, and the report shows such a CVE as patched in that release (`2.88.3 + patch`). Under each CVE the
   report gives the project's assessment in a few words - whether the system is affected, and which setting makes the
   vulnerability reachable (`security/cve-statements.txt`) - and links the security advisory where one is published.
   A CVE assessed as not affecting the system is not counted and is listed with the excluded matches, its assessment

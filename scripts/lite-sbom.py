@@ -20,6 +20,13 @@ What becomes a component:
   (internal/ui/bundle-licenses.json), nested under it;
 - linux-firmware per WHENCE entry that has a file in the image.
 
+The CVEs Buildroot marks as not applying to a package (`<PKG>_IGNORE_CVES`, show-info's `ignore_cves`;
+openccu-lite task 483) are the SBOM's `vulnerabilities`, one per CVE and package, as Buildroot's own
+utils/generate-cyclonedx writes them: `resolved_with_pedigree` when a patch the package applies names
+the CVE in its `CVE:` header (a backported fix), `not_affected` otherwise; the patches in the property
+`openccu-lite:patches`, the variable in `openccu-lite:ignore-var`. scripts/lite-cve-scan.py takes such
+a CVE as fixed in that release and marks the cell "+ patch".
+
 Each distinct licence text is stored once: the first licence that carries it has `text` and a
 `bom-ref`, every other names that ref in `properties[openccu-lite:text-ref]` (occulited's
 /licenses page reads it that way). `properties[openccu-lite:origin]` says where a top-level component
@@ -319,6 +326,63 @@ class Build:
         li = os.path.join(self.root, "legal-info", "licenses", f"{name}-{v}" if v else name)
         parts = [(f, t if t is not None else read(os.path.join(li, f))) for f, t in parts]
         return join_texts(parts)
+
+
+# --- the CVEs Buildroot marks as not applying (task 483) ---------------------------------------
+
+def patch_cves(path):
+    """the CVE ids a patch's header names on its `CVE:` lines (Buildroot's convention), [] when unreadable"""
+    out = []
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                if line.startswith(("diff ", "--- ", "Index: ")):
+                    break
+                if line.startswith("CVE: "):
+                    out.extend(re.findall(r"CVE-\d{4}-\d+", line))
+    except OSError:
+        pass
+    return out
+
+
+def package_patches(b, name):
+    """the patches a package applies: show-info's list (relative to the build directory, or absolute), else
+    the build directory's .applied_patches_list"""
+    out = []
+    for p in b.info.get(name, {}).get("patches") or []:
+        out.append(p if os.path.isabs(p) else os.path.join(b.root, p))
+    d = b.pkgdir(name)
+    if not out and d:
+        lst = read(os.path.join(d, ".applied_patches_list")) or ""
+        out = [l.strip() for l in lst.splitlines() if l.strip()]
+    return out
+
+
+def vulnerabilities(b, comps):
+    """the SBOM's vulnerabilities: per CVE and target package that ignores it, resolved_with_pedigree when a
+    patch of the package names the CVE, not_affected otherwise"""
+    refs = {c["name"]: c["bom-ref"] for c in comps}
+    out = []
+    for name in sorted(refs):
+        cves = (b.info.get(name) or {}).get("ignore_cves") or []
+        if not cves:
+            continue
+        patched = {}
+        for p in package_patches(b, name):
+            for cve in patch_cves(p):
+                patched.setdefault(cve, []).append(os.path.basename(p))
+        var = re.sub(r"[^A-Z0-9]", "_", name.upper()) + "_IGNORE_CVES"
+        for cve in sorted(set(cves)):
+            props = [{"name": "openccu-lite:ignore-var", "value": var}]
+            if cve in patched:
+                props.append({"name": "openccu-lite:patches", "value": " ".join(sorted(patched[cve]))})
+                analysis = {"state": "resolved_with_pedigree",
+                            "detail": f"Buildroot applies a patch that fixes it ({', '.join(sorted(patched[cve]))}; {var})"}
+            else:
+                analysis = {"state": "not_affected", "detail": f"Buildroot marks it as not applying to this package ({var})"}
+            out.append({"id": cve, "source": {"name": "NVD", "url": f"https://nvd.nist.gov/vuln/detail/{cve}"},
+                        "analysis": analysis, "affects": [{"ref": refs[name]}], "properties": props})
+    return out
 
 
 # --- components ---------------------------------------------------------------------------------
@@ -975,6 +1039,9 @@ def main():
         "components": comps,
         "dependencies": [{"ref": root_ref, "dependsOn": [c["bom-ref"] for c in comps]}],
     }
+    vulns = vulnerabilities(b, [c for c in comps if c["name"] in b.info])
+    if vulns:
+        bom["vulnerabilities"] = vulns
 
     for c in walk(comps):
         if unlicensed(c):
