@@ -4,7 +4,7 @@
 
 **Vor dem Wechsel ein Backup (`.sbk`) anlegen und aufbewahren. Es ist der Weg zurück**, und eine
 [Kopie des ganzen Systems](#zuerst-eine-kopie-des-ganzen-systems) ist der schnellere. Nach seinem ersten
-Start entfernt openccu-lite die ReGa-Datenbank der CCU und die Daten der WebUI vom System (siehe
+Start entfernt openccu-lite die Daten der WebUI vom System und behält die ReGa-Datenbank der CCU, bis sie entfernt wird (siehe
 [Was sich beim ersten Start ändert](#was-sich-beim-ersten-start-ändert)). Wer ohne das Backup zu OpenCCU zurückflasht,
 bekommt ein laufendes OpenCCU mit Anlernungen und Schlüsseln, aber ohne Namen, Räume, Programme und Systemvariablen.
 
@@ -196,9 +196,12 @@ siehe [bekannte-probleme.md](bekannte-probleme.md#hmip-geräte-nach-einem-neusta
   TLS und ohne Anmeldung, nur ein, wenn sie angehakt wird. Wählbar ist sie nicht, wenn das alte System auf diesen
   Ports eine Anmeldung verlangte oder klassisches RPC hier schon an ist. Eine solche Sicherung wird importiert, nie
   eingespielt; eine eingespielte Sicherung von openccu-lite bringt ihre eigenen Firewall-Regeln mit.
-- **Die Altlasten werden entfernt, sobald die Namen importiert sind:** `homematic.regadom` und ihre `.bak`, die
+- **Die Altlasten werden entfernt, sobald die Namen importiert sind:** die `.bak` von `homematic.regadom`, die
   `measurement` und `userprofiles` der WebUI, `etc/config/rega` und der NEO Server. Die Journal-Zeile
   `ccu leftovers removed` nennt sie. Funk-Identität, Schlüssel, Interface-Konfiguration und Addons bleiben.
+- **Die ReGa-Datenbank selbst (`homematic.regadom`) bleibt,** damit ihre Programme und Systemvariablen später von
+  einem Addon importiert werden können. Die Seite Sicherung zeigt sie im Panel *ReGa-Datenbank der CCU* und entfernt
+  sie auf Wunsch; Sicherungen enthalten sie.
 - **Die Diagrammdaten werden einmalig beim ersten Start entfernt:** `measurement/` auf dem USB-Stick und
   `/usr/local/etc/config/measurement`. openccu-lite hat keine Diagramme (keine Seite, um sie einzurichten oder
   anzuzeigen). Die Journal-Zeile `diagram data: … removed` nennt jeden Pfad mit seiner Größe; andere Dateien auf dem

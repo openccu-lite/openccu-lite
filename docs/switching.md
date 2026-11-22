@@ -4,7 +4,7 @@
 
 **Take a backup (`.sbk`) before you switch, and keep it. It is the way back**, and a
 [copy of the whole system](#a-copy-of-the-whole-system-first) is the quicker one. After its first start
-openccu-lite removes the CCU's ReGa database and the WebUI's data from the system (see
+openccu-lite removes the WebUI's data from the system and keeps the CCU's ReGa database until it is removed (see
 [What changes on the first start](#what-changes-on-the-first-start)). Flashing OpenCCU back without the backup gives you
 a working OpenCCU with your pairings and keys, but without your names, rooms, programs and system variables.
 
@@ -184,9 +184,12 @@ Before a restore or an import the Backup page also judges the backup's HmIP secu
   firewall allowed; it is never ticked in advance and switches classic RPC on, plain and TLS and without a login, only
   when ticked. It cannot be chosen when the old system asked for a login on these ports, or when classic RPC is on here
   already. Such a backup is imported, never restored; a restored backup of openccu-lite brings its own firewall rules.
-- **The leftovers are removed once the names are imported:** `homematic.regadom` and its `.bak`, the WebUI's
+- **The leftovers are removed once the names are imported:** the `.bak` of `homematic.regadom`, the WebUI's
   `measurement` and `userprofiles`, `etc/config/rega` and the NEO Server. The journal line `ccu leftovers removed`
   lists them. The radio identity, the keys, the interface configuration and the addons stay.
+- **The ReGa database itself (`homematic.regadom`) stays,** so its programs and system variables can be imported
+  later by an addon. The Backup page shows it in the panel *ReGa database of the CCU* and removes it when you choose
+  to; backups carry it.
 - **The diagram data is removed once, at the first start:** the USB stick's `measurement/` and
   `/usr/local/etc/config/measurement`. openccu-lite has no diagrams (no page to set them up or show them). The journal
   line `diagram data: … removed` names each path with its size; other files on the stick stay.
