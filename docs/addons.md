@@ -376,6 +376,11 @@ as *use init to start*. On openccu-lite **the daemon belongs in `start`**:
   generated `30-addon-init.conf`, an `ExecStartPre`); the boot pass skips it. A daemon started
   there is still running when `ExecStart` begins, and systemd logs *Found left-over process … in
   control group while starting unit* at every start.
+- **A script that starts the daemon in `init` and in `start` alike** (`init|start) start`, with a
+  check for a running daemon) has the same problem as a confined addon: its unit starts it in the
+  `init` step, systemd logs the left-over process, and `start` then reports the daemon as already
+  running - at every start. On openccu-lite, `init` must not start the daemon at all: inside the
+  addon's unit it should do nothing beyond preparing.
 
 openccu-lite does not change how `init` runs to make up for it (decided 2026-09-29): `init` only
 prepares - directories, generated configuration. An addon that must keep the CCU behaviour can
