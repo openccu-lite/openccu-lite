@@ -178,6 +178,8 @@ lighty.r.resp_header["X-Echo-Ingress"] = ingress
 local p = lighty.r.req_attr["uri.path"] or ""
 if p:find("immutable", 1, true) then lighty.r.resp_header["Cache-Control"] = "public, max-age=31536000, immutable" end
 if p:find("nostore", 1, true) then lighty.r.resp_header["Cache-Control"] = "no-store" end
+-- B-356: an answer of occulited's with a security header of its own
+if p:find("secure", 1, true) then lighty.r.resp_header["X-Frame-Options"] = "DENY" end
 lighty.r.resp_header["Content-Type"] = "text/plain"
 lighty.r.resp_body:set({ "echo\n" })
 return 200
@@ -437,6 +439,19 @@ class H(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Echo-Identity", ident)
         if "immutable" in self.path:
             self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        if "secure" in self.path:
+            # B-356: a backend with security headers of its own - other values than the system's
+            # defaults where there are any, and the default's own value once
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Referrer-Policy", "same-origin")
+            self.send_header("X-Robots-Tag", "noindex")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Security-Policy", "frame-ancestors 'none'")
+        if "twice" in self.path:
+            # a backend's own two header lines are its own business: both pass
+            self.send_header("X-Robots-Tag", "noindex")
+            self.send_header("X-Robots-Tag", "none")
         self.send_header("Content-Length", "5")
         self.end_headers()
         self.wfile.write(b"echo\n")
@@ -741,6 +756,51 @@ if curl -sk -o /dev/null -D - --max-time 5 $R -H "$HC" $S/addons/x/frame/index.h
 }
 else
   echo "skip  Cache-Control: this occulited's fragment still lets setenv.conf replace every answer's (before B-121)"
+fi
+
+echo "---- the security headers: a backend's own pass once and unchanged, the defaults only where it has none (B-356)"
+# The base setenv.conf adds its security headers to every answer; behind a proxy rule the backend's
+# own arrived beside them (X-Frame-Options: DENY and SAMEORIGIN, nosniff twice). occulited's
+# response-start script takes the system's line away again where the answer brought its own.
+# onceh <label> <header name, lower case> <the one value wanted, "a|b" for two lines> curl arguments...
+onceh() {
+  label=$1 name=$2 want=$3
+  shift 3
+  got=$(curl -sk -o /dev/null -D - --max-time 5 "$@" | tr -d '\r' | awk -v n="$name" 'BEGIN { FS=": " } tolower($1) == n { sub(/^[^:]*: /, ""); print }' | paste -sd '|' -)
+  if [ "$got" = "$want" ]; then ok "$label: $name: $got"; else bad "$label: $name: got '$got', want '$want'"; fi
+}
+if grep -q 'B-356' /etc/lighttpd/occulite-starting.lua 2>/dev/null; then
+# shellcheck disable=SC2086
+{
+for proto in --http1.1 --http2; do
+  onceh "an addon's own backend with its own ($proto)" x-frame-options "DENY" $R $proto -H "$HC" $S/addons/echo/secure
+  onceh "an addon's own backend with its own ($proto)" x-content-type-options "nosniff" $R $proto -H "$HC" $S/addons/echo/secure
+  onceh "an addon's own backend with its own ($proto)" referrer-policy "same-origin" $R $proto -H "$HC" $S/addons/echo/secure
+  onceh "an addon's own backend with its own ($proto)" x-robots-tag "noindex" $R $proto -H "$HC" $S/addons/echo/secure
+  onceh "an addon's own backend with its own ($proto)" cache-control "no-store" $R $proto -H "$HC" $S/addons/echo/secure
+  onceh "an addon's own backend with its own ($proto)" content-security-policy "frame-ancestors 'none'" $R $proto -H "$HC" $S/addons/echo/secure
+  # what the backend did not set is still the system's
+  onceh "an addon's own backend with its own ($proto): the rest stays the system's" x-xss-protection "1; mode=block" $R $proto -H "$HC" $S/addons/echo/secure
+  onceh "an addon's own backend with its own ($proto): the rest stays the system's" x-download-options "noopen" $R $proto -H "$HC" $S/addons/echo/secure
+  onceh "an addon's own backend with its own ($proto): the rest stays the system's" x-permitted-cross-domain-policies "none" $R $proto -H "$HC" $S/addons/echo/secure
+done
+onceh "an addon's own backend without any: the default" x-frame-options "SAMEORIGIN" $R -H "$HC" $S/addons/echo/
+onceh "an addon's own backend without any: the default" x-content-type-options "nosniff" $R -H "$HC" $S/addons/echo/
+onceh "an addon's own backend without any: the default" referrer-policy "no-referrer" $R -H "$HC" $S/addons/echo/
+onceh "an addon's own backend without any: the default" x-robots-tag "none" $R -H "$HC" $S/addons/echo/
+onceh "a backend's own two lines both pass, the system's does not join them" x-robots-tag "noindex|none" $R -H "$HC" $S/addons/echo/twice
+onceh "an addon path outside /addons/ with its own" x-frame-options "DENY" $R $S/description.xml?secure
+onceh "an addon path outside /addons/ with its own" referrer-policy "same-origin" $R $S/description.xml?secure
+onceh "the API with its own" x-frame-options "DENY" $R $S/api/echo-secure
+onceh "the API without any: the default" x-frame-options "SAMEORIGIN" $R $S/api/echo
+onceh "the shell without any: the default" x-content-type-options "nosniff" $R $S/echo
+onceh "the gate's own 401 (no session): the default" x-frame-options "SAMEORIGIN" $R $S/addons/echo/secure
+onceh "a WebUI file lighttpd serves itself: the default" x-frame-options "SAMEORIGIN" $R $S/config/stringtable_de.txt
+onceh "a WebUI file lighttpd serves itself: the default" referrer-policy "no-referrer" $R $S/config/stringtable_de.txt
+onceh "an addon's own socket, outside occulited's fragment: the system's beside the backend's (as before)" x-frame-options "DENY|SAMEORIGIN" "http://$IP:8282/secure"
+}
+else
+  echo "skip  the security headers: this occulited's response-start script does not take the doubled ones away (before B-356)"
 fi
 
 if grep -q 'public-views' /etc/lighttpd/occulite-gate.lua; then

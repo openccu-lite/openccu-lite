@@ -196,7 +196,8 @@ breached passwords ([security-asvs.md](security-asvs.md) V6.2 says why).
 
 - **Response headers** from lighttpd on every answer: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options:
   nosniff`, `Referrer-Policy: no-referrer`, an empty `Server`, and `Cache-Control: private, no-cache` where an answer
-  sets none of its own (the API's secrets carry `no-store`). HSTS where you switch it on.
+  sets none of its own (the API's secrets carry `no-store`). HSTS where you switch it on. An addon page whose own
+  server sets one of these headers keeps its own value, once: the system's is only the default.
 - **The shell's Content-Security-Policy**, set by occulited on the shell's own pages (`internal/ui/csp.txt`): scripts
   only from the system, never inline or evaluated; inline styles allowed; `frame-ancestors 'self'`; `object-src
   'none'`; the camera for the shell itself (the QR scanner), no microphone or location. occulited's UI tests open every
