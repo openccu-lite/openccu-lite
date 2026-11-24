@@ -2,8 +2,8 @@
 # shellcheck shell=dash disable=SC2169
 #
 # openccu-lite: overlay/base/bin/install_addon with one step in front (openccu-lite B-274).
-# Everything below the hand-over is the base copy unchanged; review it against that file on
-# every rebase.
+# Everything below the hand-over is the base copy unchanged but for update_script's output
+# (occulited B-167, marked there); review it against that file on every rebase.
 #
 # An install started outside occulited - on the command line, or by an addon's own updater - is
 # handed to occulited's install (POST /api/system/v1/addons/install/local, the install token as
@@ -24,6 +24,7 @@ LITE_TMP=${OCCU_INSTALL_TMP:-/usr/local/tmp}                       # overridable
 LITE_TOKEN=${OCCU_INSTALL_TOKEN_FILE:-/run/occulite/install-token}   # (scripts/testcases/
 LITE_CGROUP=${OCCU_INSTALL_CGROUP:-/proc/self/cgroup}               #  lite-install-addon-test.sh)
 LITE_API=${OCCU_INSTALL_API:-http://127.0.0.1:8183/api/system/v1/addons/install/local}
+LITE_RUN=${OCCU_INSTALL_RUN:-/run}                                 # update_script's output, while it runs
 
 # in_occulited_install: the own cgroup is occulited's install scope (cgroup v2 has the one line
 # "0::<path>"; on v1 every controller line carries the same path)
@@ -135,8 +136,19 @@ fi
 ) || exit 105
 
 # perform addon install by executing the 'update_script' script
-(cd "${UPDATEDIR}" && ./update_script HM-RASPBERRYMATIC 2>/dev/null >/dev/null)
+# openccu-lite (occulited B-167), the one place where this body is not the base copy's: the
+# script's output goes to a file on the /run tmpfs instead of /dev/null, and when the script fails
+# its last lines are this script's output - occulited shows them with the failed install, where
+# "exit 13" alone told nobody that the package was for another architecture. A file, not a pipe:
+# a daemon the script starts inherits its output, and a pipe's reader would wait for that daemon.
+LITE_OUT=$(mktemp -p "${LITE_RUN}" install_addon.XXXXXX 2>/dev/null) || LITE_OUT=/dev/null
+(cd "${UPDATEDIR}" && ./update_script HM-RASPBERRYMATIC >"${LITE_OUT}" 2>&1)
 RESULT=$?
+if [ ${RESULT} -ne 0 ] && [ ${RESULT} -ne 10 ] && [ -s "${LITE_OUT}" ]; then
+  echo "update_script (exit ${RESULT}):"
+  tail -c 16384 "${LITE_OUT}" | tail -n 20 | cut -c1-400
+fi
+[ "${LITE_OUT}" = /dev/null ] || rm -f "${LITE_OUT}"
 
 # make sure rootfs and bootfs are read-only
 mount -o ro,remount /

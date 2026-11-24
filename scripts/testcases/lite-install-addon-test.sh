@@ -9,7 +9,10 @@
 # connection that broke after the upload installs nothing (exit 1). curl is a fake on PATH that
 # records its arguments and answers what the case asks for; nothing needs root. The base install's
 # failure exits (101, 102, 104, 105) run on a copy whose /usr/local/tmp is the test's own directory:
-# its unpack directory is gone afterwards.
+# its unpack directory is gone afterwards. update_script's output (occulited B-167) runs on the same
+# copy: a failing script's last lines are the installer's output, bounded; a succeeding one's are
+# not shown; a daemon the script leaves behind does not hold the install. The body below the
+# hand-over is the base copy's but for that block.
 #
 # Usage: sh scripts/testcases/lite-install-addon-test.sh    (from the fork's checkout)
 set -u
@@ -122,7 +125,7 @@ base_run() { # archive-maker -> $code, the tmp directory's content in $left
     $BSH "$B.sh" > "$T/stdout" 2> "$T/stderr"
   code=$?
   left=$(ls -A "$B/tmp")
-  [ ! -s "$LOG" ] || fail "exit $code reached mount, sync or ldconfig: $(cat "$LOG")"
+  [ -n "${REACHES:-}" ] || [ ! -s "$LOG" ] || fail "exit $code reached mount, sync or ldconfig: $(cat "$LOG")"
 }
 no_script() { echo payload > "$B/src/readme.txt"; tar -C "$B/src" -czf "$B/tmp/new_addon.tar.gz" readme.txt; }
 not_exec()  { echo 'exit 0' > "$B/src/update_script"; chmod 644 "$B/src/update_script"; tar -C "$B/src" -czf "$B/tmp/new_addon.tar.gz" update_script; }
@@ -145,11 +148,58 @@ base_run junk
 base_run true
 [ "$code" = 101 ] && [ -z "$left" ] && ok "no archive (101): nothing made" || fail "no archive: exit $code, left '$left'"
 
-# 8. everything below the hand-over is the base copy unchanged
-if [ "$(sed -n '/^# check if we have an update archive/,$p' "$SCRIPT")" = "$(sed -n '/^# check if we have an update archive/,$p' "$BASE")" ]; then
-  ok "the install itself is the base copy's"
+# 8. update_script's output (occulited B-167): nothing of a script that succeeds or asks for a
+#    reboot, the last 20 lines of one that fails - bounded in length - and its exit code; the file
+#    it went to is gone afterwards, and a daemon the script leaves behind does not hold the install
+script_pkg() { # the update_script's body
+  printf '#!/bin/sh
+%s
+' "$1" > "$B/src/update_script"; chmod 755 "$B/src/update_script"
+  tar -C "$B/src" -czf "$B/tmp/new_addon.tar.gz" update_script
+}
+mkdir -p "$T/run"
+export OCCU_INSTALL_RUN="$T/run"
+REACHES=1
+wrong_arch() { script_pkg 'echo "copying files"; echo "this package is for aarch64, this system is x86_64: take battery-x86_64-1.5.5.tar.gz" >&2; exit 13'; }
+base_run wrong_arch
+[ "$code" = 13 ] && grep -qx 'update_script (exit 13):' "$T/stdout" && grep -q 'this package is for aarch64, this system is x86_64' "$T/stdout" && grep -q 'copying files' "$T/stdout" \
+  && ok "a failing update_script: its exit code, and its output (stdout and stderr) as the installer's" || fail "a failing update_script: exit $code, stdout '$(cat "$T/stdout")'"
+[ -z "$(ls -A "$T/run")" ] && [ -z "$left" ] && ok "its output file and the unpack directory are gone" || fail "left behind: run '$(ls -A "$T/run")', tmp '$left'"
+succeeds() { script_pkg 'echo "all fine, a lot of chatter"; exit 0'; }
+base_run succeeds
+[ "$code" = 0 ] && [ ! -s "$T/stdout" ] && [ -z "$(ls -A "$T/run")" ] && ok "an update_script that succeeds: no output" || fail "a succeeding update_script: exit $code, stdout '$(cat "$T/stdout")'"
+reboots() { script_pkg 'echo "installed, reboot please"; exit 10'; }
+base_run reboots
+[ "$code" = 10 ] && [ ! -s "$T/stdout" ] && ok "an update_script that asks for a reboot (10): no output" || fail "exit 10: exit $code, stdout '$(cat "$T/stdout")'"
+chatty() { script_pkg 'i=0; while [ $i -lt 3000 ]; do echo "line $i $(printf %%0600d 0)"; i=$((i+1)); done; echo "the last line"; exit 1'; }
+base_run chatty
+lines=$(wc -l < "$T/stdout"); longest=$(awk '{ if (length($0) > m) m = length($0) } END { print m }' "$T/stdout")
+[ "$code" = 1 ] && [ "$lines" -le 21 ] && [ "$longest" -le 400 ] && [ "$(tail -n 1 "$T/stdout")" = "the last line" ] \
+  && ok "a chatty failing script: its last 20 lines at most, each cut at 400 characters" || fail "a chatty script: exit $code, $lines lines, longest $longest"
+silent() { script_pkg 'exit 13'; }
+base_run silent
+[ "$code" = 13 ] && [ ! -s "$T/stdout" ] && ok "a failing script that says nothing: the exit code alone" || fail "a silent failing script: exit $code, stdout '$(cat "$T/stdout")'"
+# a daemon the script starts keeps the script's output open; the install does not wait for it
+lingers() { script_pkg "(sleep 20; echo late) & echo started; exit 1"; }
+start=$(date +%s)
+base_run lingers
+took=$(( $(date +%s) - start ))
+[ "$code" = 1 ] && [ "$took" -lt 10 ] && grep -qx started "$T/stdout" && ok "a daemon left behind does not hold the install (${took} s)" || fail "a lingering daemon: exit $code after ${took} s, stdout '$(cat "$T/stdout")'"
+# no place for the output: the install runs all the same, without it
+OCCU_INSTALL_RUN="$T/no-such-dir" base_run wrong_arch
+[ "$code" = 13 ] && [ ! -s "$T/stdout" ] && ok "no place for the output: the install runs, the exit code alone" || fail "no output directory: exit $code, stdout '$(cat "$T/stdout")'"
+unset REACHES
+
+# 9. everything below the hand-over is the base copy unchanged - but for update_script's output:
+#    the lite body with its marked block put back to the base's two lines is the base's body
+lite_body=$(sed -n '/^# check if we have an update archive/,$p' "$SCRIPT" | awk '
+  /^# openccu-lite \(occulited B-167\)/ { skip = 1 }
+  skip && /^\[ "\$\{LITE_OUT\}" = \/dev\/null \] \|\| rm -f/ { skip = 0; print "(cd \"${UPDATEDIR}\" && ./update_script HM-RASPBERRYMATIC 2>/dev/null >/dev/null)"; print "RESULT=$?"; next }
+  !skip { print }')
+if [ "$lite_body" = "$(sed -n '/^# check if we have an update archive/,$p' "$BASE")" ]; then
+  ok "the install itself is the base copy's, but for update_script's output"
 else
-  fail "the lite install_addon's body differs from overlay/base/bin/install_addon"
+  fail "the lite install_addon's body differs from overlay/base/bin/install_addon beyond update_script's output"
 fi
 
 [ "$fails" -eq 0 ] && { echo "lite-install-addon-test: all passed"; exit 0; }
