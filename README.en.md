@@ -9,6 +9,7 @@
 [![beta](https://openccu-lite.github.io/openccu-lite/beta.svg)](https://github.com/openccu-lite/openccu-lite/releases)
 [![upstream versions](https://img.shields.io/endpoint?url=https://openccu-lite.github.io/openccu-lite/badge.json)](https://openccu-lite.github.io/openccu-lite/en.html)
 [![severe CVEs](https://img.shields.io/endpoint?url=https://openccu-lite.github.io/openccu-lite/cve-badge.json)](https://openccu-lite.github.io/openccu-lite/cve-en.html)
+[![security advisories](https://img.shields.io/endpoint?url=https://openccu-lite.github.io/openccu-lite/advisory-badge.json)](https://github.com/openccu-lite/openccu-lite/security/advisories)
 
 [:de: Deutsches README](README.md)
 
@@ -56,7 +57,7 @@ possible.
 - [Homematic Manager](https://github.com/hobbyquaker/homematic-manager) - managing devices and direct links; also as an
   application for Windows, macOS and Linux
 - [OpenCCU-Loom](https://github.com/SukramJ/openccu-loom) - managing devices and direct links, Home Assistant, MQTT,
-  Matter, MCP server and much more
+  Matter, MCP server, an alarm system and much more
 
 ### More addons
 

@@ -9,6 +9,7 @@
 [![beta](https://openccu-lite.github.io/openccu-lite/beta.svg)](https://github.com/openccu-lite/openccu-lite/releases)
 [![upstream versions](https://img.shields.io/endpoint?url=https://openccu-lite.github.io/openccu-lite/badge.json)](https://openccu-lite.github.io/openccu-lite/)
 [![severe CVEs](https://img.shields.io/endpoint?url=https://openccu-lite.github.io/openccu-lite/cve-badge.json)](https://openccu-lite.github.io/openccu-lite/cve.html)
+[![security advisories](https://img.shields.io/endpoint?url=https://openccu-lite.github.io/openccu-lite/advisory-badge.json)](https://github.com/openccu-lite/openccu-lite/security/advisories)
 
 [:uk: English README](README.en.md)
 
@@ -58,7 +59,7 @@ schlankes Funk-Gateway.
 - [Homematic Manager](https://github.com/hobbyquaker/homematic-manager) - Geräte und Direktverknüpfungen verwalten;
   auch als Anwendung für Windows, macOS und Linux
 - [OpenCCU-Loom](https://github.com/SukramJ/openccu-loom) - Geräte und Direktverknüpfungen verwalten, Home Assistant,
-  MQTT, Matter, MCP server und vieles mehr
+  MQTT, Matter, MCP server, Alarmsystem und vieles mehr
 
 ### Weitere Addons
 
