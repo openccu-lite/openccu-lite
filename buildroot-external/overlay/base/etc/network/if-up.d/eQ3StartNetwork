@@ -71,6 +71,10 @@ case "${IFACE}" in
     # wait until the link is up (at most 12 s, checked every 0.2 s,
     # one dot every 2 s)
     /sbin/ip link set "${IFACE}" up
+    # openccu-lite: the userfs's .link files (an Ethernet speed limit) are applied now that the
+    # interface is up - its driver takes the advertised speeds only then - and before the link is
+    # negotiated; nothing runs while no such file is applied (occu-link.service)
+    [[ -x /usr/libexec/occu/lite-link-apply ]] && /usr/libexec/occu/lite-link-apply --up "${IFACE}"
     i=0
     while [[ "$(cat "/sys/class/net/${IFACE}/carrier")" == "0" ]]; do
       sleep 0.2

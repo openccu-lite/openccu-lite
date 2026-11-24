@@ -40,6 +40,7 @@ enable occu-machine-id-store.service
 enable occu-network.service
 enable occu-lan-reset.service
 enable occu-firewall.service
+enable occu-link.service
 enable occu-persist.service
 enable occu-radio-shadow-check.service
 enable occu-journal-sync.service

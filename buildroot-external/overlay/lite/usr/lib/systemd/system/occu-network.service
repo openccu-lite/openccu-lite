@@ -18,9 +18,11 @@
 # Before the start, a fresh install's netconfig gets its host name (lite-default-hostname):
 # openccu-lite-<the last four hex digits of eth0's MAC>, only where HOSTNAME is still empty, as
 # openccu-lite's netconfig template leaves it.
+# After occu-link.service: the userfs's .link files (an Ethernet interface held at 100 Mbit/s) are
+# with udev before ifup brings the interface up, so its first negotiation follows them.
 [Unit]
 Description=Network
-After=occu-firewall.service occu-init-system.service
+After=occu-firewall.service occu-init-system.service occu-link.service
 Before=network.target network-online.target
 Wants=network.target
 

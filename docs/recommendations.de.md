@@ -45,6 +45,12 @@ der Abschnitt oben bei der VM nennt. Für BidCos empfehle ich ein **HM-MOD-RPI-P
 **HB-RF-ETH** (Netzwerk). Vorhandene HM-LGW-O-TW-W-EU (Funk-LAN-Gateway) oder HM-CFG-USB-2 (mit der Firmware von
 Michael Gernoth) funktionieren ebenso, sind aber nur noch gebraucht zu bekommen.
 
+**Raspberry Pi 4 oder 5: bei gestörtem Funk das Ethernet auf 100 Mbit/s begrenzen.** Gigabit-Ethernet kann auf diesen
+Boards den 868-MHz-Funk stören: Der Netzwerkchip und sein Kabel strahlen in diesem Bereich ab, bei 100 Mbit/s nicht.
+*System → Netzwerk → Ethernet-Geschwindigkeit* stellt die Schnittstelle von „automatisch“ auf „100 Mbit/s“; sie handelt
+die Verbindung weiter mit dem Switch aus, bietet aber nichts Schnelleres an. Für eine Zentrale reichen 100 Mbit/s. Die
+Einstellung gibt es nur an einer Schnittstelle, die Gigabit kann.
+
 ## Ungenutztes Funkprotokoll abschalten
 
 **Empfehlung: einen Funkstandard, den keines der Geräte nutzt, abschalten.** Wer kein BidCos-Gerät hat, stellt

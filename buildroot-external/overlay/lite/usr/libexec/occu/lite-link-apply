@@ -1,0 +1,157 @@
+#!/bin/sh
+# openccu-lite: occu-link.service - the systemd .link files of the userfs, handed to udev.
+#
+# udev reads .link files from /usr/lib/systemd/network (the image, read-only), /etc/systemd/network
+# (the image as well) and /run/systemd/network, and applies the first one that matches when an
+# interface appears - at coldplug, long before the userfs is mounted. So a setting that has to
+# survive a reboot and an update lives on the userfs, in /etc/config/systemd-network/*.link, and
+# this script copies those files to /run/systemd/network, tells udev to read its configuration
+# again and replays the "add" event of the wired interfaces that are up: udev applies a .link
+# file on "add" only. An interface whose settings are the file's already keeps its link; one
+# whose advertised speeds change negotiates anew (a few seconds), and addresses and leases stay.
+#
+# Only an interface that is up is replayed: a driver such as the Raspberry Pi 4's bcmgenet
+# attaches its PHY when the interface is brought up, refuses an advertisement before ("Could not
+# set advertise mode: Invalid argument") and forgets it whenever the interface goes down. So the
+# network start calls `lite-link-apply --up <iface>` right after it brought an interface up
+# (eQ3StartNetwork), which replays that interface's add event - before the link is negotiated, so
+# the first negotiation follows the file. That call does nothing while no file is applied.
+#
+# occulited writes the files (System > Network, "Ethernet speed": Advertise=100baset-full
+# 100baset-half, because gigabit Ethernet can disturb the 868 MHz radio on a Raspberry Pi 4 or 5)
+# and restarts the unit after a change. At boot the unit runs before the network starts.
+#
+# A file that was applied and is gone: udev falls back to the image's 99-default.link, which says
+# nothing about speeds, and the interface would keep the limited advertisement until it goes down.
+# So an interface that leaves this script's files gets `ethtool -s <if> autoneg on`, which
+# advertises everything it supports again.
+#
+# Only regular files named *.link that root owns and nobody else may write are taken: a .link
+# file can rename an interface or change its MAC address, so it is root's to write (occulited's
+# helper does). What was copied is noted in /run/occu-link.list; other files in
+# /run/systemd/network (systemd-network-generator's) are never touched.
+#
+# Usage: lite-link-apply              the unit: copy the files, replay the interfaces that are up
+#        lite-link-apply --up <iface> the network start: replay this interface, if a file is applied
+set -u
+SRC=${OCCU_LINK_SRC:-/etc/config/systemd-network}
+DST=${OCCU_LINK_DST:-/run/systemd/network}
+LIST=${OCCU_LINK_LIST:-/run/occu-link.list}
+SYSNET=${OCCU_SYS_NET:-/sys/class/net}
+UDEVADM=${OCCU_UDEVADM:-udevadm}
+ETHTOOL=${OCCU_ETHTOOL:-ethtool}
+OWNER=${OCCU_LINK_OWNER:-0}
+
+# valid <file>: a .link file this script takes
+valid() {
+  f=$1
+  name=${f##*/}
+  case "$name" in
+    *[!A-Za-z0-9._-]*|.*) return 1 ;;
+    *.link) ;;
+    *) return 1 ;;
+  esac
+  [ -f "$f" ] && [ ! -L "$f" ] || return 1
+  [ "$(stat -c %u "$f" 2>/dev/null)" = "$OWNER" ] || return 1
+  mode=$(stat -c %a "$f" 2>/dev/null) || return 1
+  case "$mode" in
+    *[2367]?|*[2367]) return 1 ;;
+  esac
+  return 0
+}
+
+# the wired interfaces with a device behind them that are up (IFF_UP): not lo, not Wi-Fi, not a
+# bridge or a veth
+wired() {
+  for d in "$SYSNET"/*; do
+    [ -e "$d/device" ] || continue
+    [ -e "$d/wireless" ] || [ -e "$d/phy80211" ] && continue
+    [ "$(cat "$d/type" 2>/dev/null)" = "1" ] || continue
+    flags=$(cat "$d/flags" 2>/dev/null) || continue
+    [ $((flags & 1)) = 1 ] || continue
+    echo "${d##*/}"
+  done
+}
+
+# link_file <iface>: the .link file udev applied to it
+link_file() {
+  "$UDEVADM" info -q property "$SYSNET/$1" 2>/dev/null | sed -n 's/^ID_NET_LINK_FILE=//p'
+}
+
+if [ "${1:-}" = "--up" ]; then
+  i=${2:-}
+  case "$i" in
+    ""|*[!A-Za-z0-9._-]*) echo "<3>usage: lite-link-apply --up <iface>"; exit 2 ;;
+  esac
+  # nothing of this script's is applied: the interface is udev's as it was at coldplug
+  [ -s "$LIST" ] || exit 0
+  [ -e "$SYSNET/$i" ] || exit 0
+  "$UDEVADM" trigger --action=add --settle "$SYSNET/$i" || { echo "<4>$i: udev did not replay its add event"; exit 1; }
+  exit 0
+fi
+
+wanted=
+if [ -d "$SRC" ]; then
+  for f in "$SRC"/*.link; do
+    [ -e "$f" ] || [ -L "$f" ] || continue
+    if valid "$f"; then
+      wanted="$wanted ${f##*/}"
+    else
+      echo "<4>$f: not taken (a .link file here is a regular file of root's that nobody else may write)"
+    fi
+  done
+fi
+old=
+[ -f "$LIST" ] && old=$(cat "$LIST")
+
+# no file now and none before: nothing of this script's anywhere
+if [ -z "$wanted" ] && [ -z "$old" ]; then
+  echo "nothing to apply"
+  exit 0
+fi
+
+# the interfaces one of this script's files is applied to now
+mine=
+for i in $(wired); do
+  lf=$(link_file "$i")
+  for n in $old; do
+    [ "$lf" = "$DST/$n" ] && mine="$mine $i"
+  done
+done
+
+mkdir -p "$DST" || exit 1
+for n in $old; do
+  case " $wanted " in
+    *" $n "*) ;;
+    *) rm -f "${DST:?}/${n:?}" && echo "$n: removed" ;;
+  esac
+done
+for n in $wanted; do
+  if ! cmp -s "$SRC/$n" "$DST/$n" 2>/dev/null; then
+    cp "$SRC/$n" "$DST/.$n.tmp" && chmod 0644 "$DST/.$n.tmp" && mv "$DST/.$n.tmp" "$DST/$n" || { echo "<3>$n: could not be copied to $DST"; rm -f "${DST:?}/.${n:?}.tmp"; exit 1; }
+    echo "$n: applied"
+  fi
+done
+echo "$wanted" | tr ' ' '\n' | grep -v '^$' > "$LIST.tmp"
+mv "$LIST.tmp" "$LIST"
+
+"$UDEVADM" control --reload || { echo "<3>udev did not reload its configuration"; exit 1; }
+rc=0
+for i in $(wired); do
+  "$UDEVADM" trigger --action=add --settle "$SYSNET/$i" || { echo "<3>$i: udev did not replay its add event"; rc=1; }
+done
+
+# an interface that left this script's files advertises everything again
+for i in $mine; do
+  case "$(link_file "$i")" in
+    "$DST"/*) ;;
+    *)
+      if "$ETHTOOL" -s "$i" autoneg on 2>/dev/null; then
+        echo "$i: back to everything it supports"
+      else
+        echo "<4>$i: ethtool could not reset the advertised speeds; they are back after the next start"
+      fi
+      ;;
+  esac
+done
+exit $rc

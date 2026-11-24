@@ -60,6 +60,9 @@ need occu-network.service occu-init-system.service
 # fresh userfs is not written before its reset
 need occu-network.service occu-firewall.service
 need occu-firewall.service occu-backup-restore.service
+# the userfs's .link files reach udev from the final userfs, before any interface comes up
+need occu-network.service occu-link.service
+need occu-link.service occu-backup-restore.service systemd-udev-trigger.service
 need occu-init-rf-hardware.service occu-init-system.service occu-init-host.service
 
 # the real-time clock needs S01InitHost only; the other S01 scripts run beside it
@@ -464,6 +467,7 @@ mkdir -p "$refs_root/usr/lib/systemd/system"
 cp -a "$U"/. "$refs_root/usr/lib/systemd/system/"
 for n in local-fs.target multi-user.target network-online.target network-pre.target network.target remote-fs.target shutdown.target sysinit.target \
          basic.target timers.target systemd-journald.service systemd-tmpfiles-setup.service \
+         systemd-udevd.service systemd-udev-trigger.service \
          occulited.service occulited-helper.service psplash-start.service sshd.service; do
   [ -e "$refs_root/usr/lib/systemd/system/$n" ] || : > "$refs_root/usr/lib/systemd/system/$n"
 done

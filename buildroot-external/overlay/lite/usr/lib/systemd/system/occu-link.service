@@ -1,0 +1,28 @@
+# openccu-lite: the userfs's systemd .link files (/etc/config/systemd-network/*.link) handed to
+# udev: lite-link-apply copies them to /run/systemd/network, has udev read its configuration again
+# and replays the add events of the wired interfaces that are up. udev's coldplug ran before the
+# userfs was there, so this is where a setting that lives on the userfs reaches an interface -
+# occulited's "Ethernet speed" (100 Mbit/s only, since gigabit Ethernet can disturb the 868 MHz
+# radio on a Raspberry Pi 4 or 5).
+# After occu-backup-restore.service: the userfs is final by then (resized, reset, restored), so a
+# restoring boot applies the restored files. Before occu-network.service: the files are with udev
+# when the network start brings an interface up and replays its add event (eQ3StartNetwork:
+# lite-link-apply --up), so the first negotiation offers what the file says. occulited restarts
+# the unit after a change; without files it does nothing.
+[Unit]
+Description=Network link settings
+DefaultDependencies=no
+After=local-fs.target occu-backup-restore.service systemd-udevd.service systemd-udev-trigger.service
+RequiresMountsFor=/usr/local
+Before=network-pre.target occu-network.service
+ConditionVirtualization=!container
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/occu/lite-link-apply
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
