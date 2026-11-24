@@ -122,6 +122,10 @@ jobs:
       - name: The SBOM carries Buildroot's ignored CVEs
         # task 483: <PKG>_IGNORE_CVES as vulnerabilities, resolved_with_pedigree where a patch names the CVE
         run: sh scripts/testcases/lite-sbom-cve-test.sh
+      - name: The SBOM carries the CPEs, the kernel's real version, and the kernel's file list
+        # task 473: show-info's cpe-id per package, the built kernel's version where Buildroot says "custom",
+        # and --kernel-files: the sources the product compiled, for the CVE report
+        run: sh scripts/testcases/lite-sbom-kernel-test.sh
       - name: The piVCCU packages' bump helpers pin the fork
         # B-330: update-generic_raw_uart.sh and update-detect_radio_module.sh pin the piVCCU fork's
         # tag or a commit on its lite (never a branch, never Alex's master), the hash from two equal

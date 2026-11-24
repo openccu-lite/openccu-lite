@@ -27,6 +27,18 @@ the CVE in its `CVE:` header (a backported fix), `not_affected` otherwise; the p
 `openccu-lite:patches`, the variable in `openccu-lite:ignore-var`. scripts/lite-cve-scan.py takes such
 a CVE as fixed in that release and marks the cell "+ patch".
 
+Each package carries the CPE Buildroot names for it (show-info's `cpe-id`) as `cpe`, which is what
+scripts/lite-cve-scan.py matches against the NVD's. The kernel is listed with the version it was
+built as - the VERSION, PATCHLEVEL and SUBLEVEL of its Makefile in the build directory - where
+Buildroot only knows `custom` (a tarball by commit: the Raspberry Pi products), in its version, its
+bom-ref, its purl and its CPE; `openccu-lite:buildroot-version` keeps Buildroot's word.
+
+--kernel-files <file> also writes the list of the kernel sources this product compiled (openccu-lite
+task 473): one path per line for every object in the kernel's build directory that has its .c, .S or
+.rs beside it, sorted, after a `#` header with the product, the version and the kernel. A release
+publishes it beside the SBOM, and the CVE scanner drops a kernel CVE whose fix touches no file of
+it. Nothing is written for a product without a kernel (a container image).
+
 Each distinct licence text is stored once: the first licence that carries it has `text` and a
 `bom-ref`, every other names that ref in `properties[openccu-lite:text-ref]` (occulited's
 /licenses page reads it that way). `properties[openccu-lite:origin]` says where a top-level component
@@ -439,9 +451,58 @@ def urls(info):
     return out[:2]
 
 
+def kernel_version(b):
+    """the kernel's version as it was built, from its Makefile in the build directory; None without one"""
+    d = b.pkgdir("linux")
+    mk = read(os.path.join(d, "Makefile")) if d else None
+    if not mk:
+        return None
+    f = dict(re.findall(r"^(VERSION|PATCHLEVEL|SUBLEVEL)\s*=\s*(\d+)\s*$", mk, re.M))
+    if len(f) != 3:
+        return None
+    return f"{f['VERSION']}.{f['PATCHLEVEL']}.{f['SUBLEVEL']}"
+
+
+KERNEL_SOURCES = (".c", ".S", ".rs")
+
+
+def kernel_files(b):
+    """the kernel sources the product compiled: every object in the build directory with its source beside it"""
+    d = b.pkgdir("linux")
+    if not d:
+        return None
+    out = set()
+    for cur, dirs, files in os.walk(d):
+        rel = os.path.relpath(cur, d)
+        # the host tools and the generated user-space helpers are not the kernel
+        dirs[:] = [x for x in dirs if not (rel == "." and x in ("scripts", "tools", "usr", "Documentation", "samples"))]
+        names = set(files)
+        for fn in files:
+            # not a module's generated .mod.c, not the link's own generated files (.vmlinux.export.c, .tmp_vmlinux*)
+            if not fn.endswith(".o") or fn.endswith(".mod.o") or fn.startswith("."):
+                continue
+            for ext in KERNEL_SOURCES:
+                if fn[:-2] + ext in names:
+                    out.add(os.path.normpath(os.path.join(rel, fn[:-2] + ext)))
+                    break
+    return sorted(out)
+
+
 def package(texts, b, name):
     i = b.info[name]
     version = str(i.get("version") or "")
+    cpe = str(i.get("cpe-id") or "")
+    props = []
+    if name == "linux" and not re.match(r"^\d+\.\d+", version):
+        real = kernel_version(b)
+        if real:
+            props = [{"name": "openccu-lite:buildroot-version", "value": version}]
+            # cpe:2.3:o:linux:linux_kernel:<version>:...
+            parts = cpe.split(":")
+            if len(parts) > 5:
+                parts[5] = real
+                cpe = ":".join(parts)
+            version = real
     origin_name, extra = ORIGINS.get(name, ("buildroot", {}))
     expr = LICENSE_OVERRIDES.get(name, i.get("licenses") or "")
     text = b.license_text(name)
@@ -452,8 +513,10 @@ def package(texts, b, name):
         "version": version,
         "licenses": licences(texts, expr, text),
         "purl": f"pkg:generic/{name}@{version}" if version else f"pkg:generic/{name}",
-        "properties": origin(origin_name),
+        "properties": origin(origin_name) + props,
     }
+    if cpe.startswith("cpe:2.3:"):
+        c["cpe"] = cpe
     c.update(extra)
     cr = copyright_of(text)
     if cr:
@@ -974,6 +1037,7 @@ def main():
     ap.add_argument("--version", required=True)
     ap.add_argument("--out", required=True, help="the file; .gz is gzip")
     ap.add_argument("--check", action="store_true", help="fail on a gap the exceptions file does not name")
+    ap.add_argument("--kernel-files", help="also write the list of the kernel sources the product compiled")
     ap.add_argument("--exceptions", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "buildroot-external", "sbom-exceptions.txt"))
     a = ap.parse_args()
 
@@ -1060,6 +1124,23 @@ def main():
     else:
         with open(a.out, "wb") as f:
             f.write(data)
+    if a.kernel_files:
+        kf = kernel_files(b) if "linux" in b.info else None
+        if kf:
+            kv = next((c["version"] for c in comps if c["name"] == "linux"), "")
+            os.makedirs(os.path.dirname(os.path.abspath(a.kernel_files)), exist_ok=True)
+            with open(a.kernel_files, "w", encoding="utf-8") as f:
+                f.write(f"# openccu-lite {a.product} {a.version}: the kernel sources this product compiled (linux {kv})\n")
+                f.write("\n".join(kf) + "\n")
+            print(f"lite-sbom: {len(kf)} kernel sources -> {a.kernel_files}", file=sys.stderr)
+        else:
+            # no kernel in this product, or its build directory is gone: no stale list either
+            if os.path.exists(a.kernel_files):
+                os.remove(a.kernel_files)
+            if "linux" in b.info:
+                print("lite-sbom: kernel-files: no object with a source in the kernel's build directory", file=sys.stderr)
+                if a.check:
+                    sys.exit(1)
     n = sum(1 for _ in walk(comps))
     size = os.path.getsize(a.out)
     print(f"lite-sbom: {n} components ({len(comps)} top level), {len(texts.refs)} licence texts, {len(data) // 1024} KiB, {size // 1024} KiB written -> {a.out}", file=sys.stderr)

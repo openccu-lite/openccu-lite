@@ -107,6 +107,17 @@ PY
     printf '%s\n%s\n' "$TREE/release/$f" "$TREE/release/$f.sha256" >> "$STAGE/assets"
   done
   printf '%s\n%s\n' "$STAGE/openccu-lite-$P-$V.cdx.json" "$STAGE/openccu-lite-$P-$V.cdx.json.sha256" >> "$STAGE/assets"
+  # the kernel sources the product compiled, beside its SBOM (lite-sbom.py --kernel-files): the CVE
+  # report reads it. A product without a kernel (a container image) has none; a product whose SBOM
+  # lists a kernel must have it, with this round's header
+  K="$TREE/build-$P/kernel-files.txt"
+  if grep -q '"bom-ref": "linux@' "$STAGE/openccu-lite-$P-$V.cdx.json"; then
+    [ -s "$K" ] || fail "$P: $K is missing - the build did not write the kernel's file list"
+    head -1 "$K" | grep -q "^# openccu-lite $P $V: " || fail "$P: $K is not this round's: $(head -1 "$K")"
+    cp "$K" "$STAGE/openccu-lite-$P-$V.kernel-files.txt"
+    (cd "$STAGE" && sha256sum "openccu-lite-$P-$V.kernel-files.txt" > "openccu-lite-$P-$V.kernel-files.txt.sha256")
+    printf '%s\n%s\n' "$STAGE/openccu-lite-$P-$V.kernel-files.txt" "$STAGE/openccu-lite-$P-$V.kernel-files.txt.sha256" >> "$STAGE/assets"
+  fi
 done
 
 # ---- occulited's API documents (task 298): from the pinned occulited's source in the build tree ----
@@ -212,7 +223,7 @@ openccu-lite $V: a Homematic CCU firmware without ReGaHSS, built on OpenCCU-Base
 
 *The maintainer edits this header before publishing.*
 
-**Download — which file for whom:** the \`.zip\` per board is the image and the update package for a system set up from an OpenCCU image (SD card, USB disk) and for the VM (\`x86_64-ova\`, also as \`.ova\` for a fresh import); a **CCU3** — or any card with the CCU3 layout, \`PRODUCT=ccu3\` in its \`/VERSION\` — takes \`openccu-lite-aarch64-rpi3-$V-ccu3.tgz\` through its own WebUI, not the zip (two recovery passes; see [switching.md](https://github.com/$GH_REPO/blob/$SHA/docs/switching.md)). The update needs 2.8 GB free on the userfs. Every file has its \`.sha256\`; \`SHA256SUMS\` covers all of them and is signed with minisign (\`SHA256SUMS.minisig\`). The SBOM of each image is its \`.cdx.json\`.
+**Download — which file for whom:** the \`.zip\` per board is the image and the update package for a system set up from an OpenCCU image (SD card, USB disk) and for the VM (\`x86_64-ova\`, also as \`.ova\` for a fresh import); a **CCU3** — or any card with the CCU3 layout, \`PRODUCT=ccu3\` in its \`/VERSION\` — takes \`openccu-lite-aarch64-rpi3-$V-ccu3.tgz\` through its own WebUI, not the zip (two recovery passes; see [switching.md](https://github.com/$GH_REPO/blob/$SHA/docs/switching.md)). The update needs 2.8 GB free on the userfs. Every file has its \`.sha256\`; \`SHA256SUMS\` covers all of them and is signed with minisign (\`SHA256SUMS.minisig\`). The SBOM of each image is its \`.cdx.json\`; \`.kernel-files.txt\` lists the kernel sources the image's kernel was built from.
 
 **API:** occulited's OpenAPI 3.1 document (\`occulited-openapi-$V.json\`, also served by the system as \`GET /api/openapi.json\` with \`system:read\`), the AsyncAPI 3.0 document of its event streams and lite-rpc's method catalogue are attached.
 

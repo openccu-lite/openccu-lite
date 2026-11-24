@@ -4,6 +4,10 @@
 # sees the target tree as the image gets it. scripts/lite-sbom.py --check fails the build on a gap
 # (a component without a licence, a package without a component) that
 # buildroot-external/sbom-exceptions.txt does not name with a reason.
+#
+# Beside it, in the build directory and not in the image: kernel-files.txt, the kernel sources this
+# product compiled. A release publishes it with the SBOM, and the CVE report drops a kernel CVE whose
+# fix touches none of them.
 set -e
 top="$(cd "$(dirname "$0")/../../.." && pwd)"
 if [ ! -f "${BASE_DIR}/show-info.json" ]; then
@@ -11,4 +15,5 @@ if [ ! -f "${BASE_DIR}/show-info.json" ]; then
 	exit 1
 fi
 python3 "${top}/scripts/lite-sbom.py" --build-dir "${BASE_DIR}" --product "${PRODUCT}" --version "${LITE_VERSION:-0.0.0}" \
-	--check --out "${TARGET_DIR}/usr/share/openccu-lite/sbom.cdx.json.gz"
+	--check --out "${TARGET_DIR}/usr/share/openccu-lite/sbom.cdx.json.gz" \
+	--kernel-files "${BASE_DIR}/kernel-files.txt"
