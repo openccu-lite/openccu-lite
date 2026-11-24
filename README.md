@@ -14,20 +14,22 @@
 [:uk: English README](README.en.md)
 
 openccu-lite ist eine Firmware für Homematic-Zentralen, ein Fork des [OpenCCU-Projekts](https://github.com/OpenCCU/OpenCCU).
-Sie richtet sich an alle, die ihre Automation anderswo betreiben, etwa in Home Assistant, ioBroker oder Node-RED, und
-von der Zentrale vor allem eines wollen: dass sie die Homematic-Geräte zuverlässig anbindet.
+Sie bringt den Funk-Stack von [OpenCCU-Base](https://github.com/OpenCCU/OpenCCU-Base) mit (rfd, hs485d, multimacd und den HMIPServer) und eine
+[neu entwickelte Oberfläche](docs/walkthrough/README.md) für die Verwaltung des Systems. Alles Weitere kommt als Addon
+dazu: womit die Geräte angelernt und verwaltet werden, Programme und Systemvariablen, Anbindungen und Werkzeuge.
+Home Assistant, ioBroker, Node-RED und andere Software lassen sich an die Zentrale anbinden.
 
-Deshalb fehlt einiges, was eine CCU sonst mitbringt: **Es gibt in openccu-lite keine WebUI-Programme, keine
-Systemvariablen und keine Homematic-Scripte**, denn die ReGaHSS wurde entfernt. Die alte CCU-WebUI wurde durch eine
-[neu entwickelte Oberfläche](docs/walkthrough/README.md) ersetzt. Systeminterna wie das Init-System, das Logging oder
-die Funkmodulerkennung wurden von Grund auf neu gestaltet.
+Die ReGaHSS und mit ihr die alte CCU-WebUI und die Homematic-Scripte gibt es in openccu-lite nicht. **Programme
+(*Wenn … Dann … Sonst*) und Systemvariablen bringt das Addon [Logic](https://github.com/openccu-lite/lite-addon-logic)**, das
+sie auch aus einer CCU übernimmt; es ist derzeit noch in Beta. Systeminterna wie das Init-System, das Logging oder die
+Funkmodulerkennung wurden von Grund auf neu gestaltet.
 
 ## Schwerpunkte
 
 - **Stabil.** Weniger Bestandteile heißt weniger, was ausfallen kann und gepflegt werden muss. Eine hohe Abdeckung
   durch automatisierte Tests, auch auf echter Hardware, sichert jedes Release ab.
-- **Sicher.** Addons und Systemdienste laufen voneinander abgeschottet mit eingeschränkten Rechten, und Programme
-  bekommen nur die Rechte, die sie brauchen. Die Sicherheit folgt einem [Bedrohungsmodell](docs/threat-model.md), und
+- **Sicher.** Addons und Systemdienste laufen voneinander abgeschottet mit eingeschränkten Rechten, und jeder Dienst
+  bekommt nur die Rechte, die er braucht. Die Sicherheit folgt einem [Bedrohungsmodell](docs/threat-model.md), und
   ein täglicher [CVE-Bericht](https://openccu-lite.github.io/openccu-lite/cve.html) zeigt, welche bekannten
   Schwachstellen die veröffentlichten Versionen betreffen. Gefundene Lücken stehen als
   [Security Advisories](https://github.com/openccu-lite/openccu-lite/security/advisories) mit Abhilfe bereit.
@@ -35,7 +37,7 @@ die Funkmodulerkennung wurden von Grund auf neu gestaltet.
 - **Privat.** Keine Telemetrie. Im [lokalen Schlüsselmodus](docs/lokaler-schluesselmodus.md) lässt sich eine Zentrale
   auch ohne Internetverbindung und ohne Abhängigkeit vom Schlüsselserver von eQ-3 betreiben, sonstige ausgehende
   Verbindungen (Update-Checks) gibt es nur mit Zustimmung des Benutzers. Details: [Datenschutz](docs/privacy.md).
-- **Freie Funkkonfiguration.** Welches Funkmodul welche Schnittstelle bedient, ist frei wählbar. Das ermöglicht
+- **Flexibel.** Welches Funkmodul welche Schnittstelle bedient, ist frei wählbar. Das ermöglicht
   besondere Konfigurationen, etwa getrennte Funkmodule für BidCos-RF und HmIP-RF oder einen reinen HmIP-Betrieb ohne
   BidCos oder einen reinen BidCos-Betrieb ohne HmIP. [Beispiele](docs/walkthrough/README.md#beispiele-für-funk-konfigurationen)
   zeigt der Rundgang. Eine [Übersicht](docs/radio.md) erklärt alle Einstellungen der Funkmodule und von multimacd und
@@ -43,6 +45,12 @@ die Funkmodulerkennung wurden von Grund auf neu gestaltet.
 - **Minimal.** openccu-lite bringt nur mit, was die Zentrale grundlegend braucht. Alles andere kommt als Addon dazu,
   und zwar nur das, was man wirklich nutzen möchte. So bleibt das Image klein, Updates gehen schneller und der
   Wartungsaufwand sinkt.
+- **Frei.** Wie man sein System zusammenstellt und welche Software darauf läuft, entscheidet jeder selbst. Für das
+  Anlernen, die Bedienung, die Anbindung an andere Systeme oder die Automation auf dem System selbst stehen jeweils
+  mehrere Alternativen bereit, die sich auch nebeneinander nutzen lassen. openccu-lite ist freie Software, ausgenommen
+  die Komponenten von eQ-3 unter deren Lizenz (HMSL). Beiträge und Pull Requests sind willkommen. Das System gibt
+  Einblick und Kontrolle, nichts wird versteckt: Umfangreiche Konfigurationsmöglichkeiten in der Weboberfläche geben
+  möglichst viel Freiheit.
 
 ## Addons: nur das, was gebraucht wird
 
@@ -53,18 +61,26 @@ eingebauten Addon-Katalog mit einem Klick installieren.
 
 Womit die Geräte angelernt und konfiguriert und die Direktverknüpfungen verwaltet werden, ist frei wählbar. Die
 folgenden Programme **können** als Addon auf openccu-lite installiert werden und sind dann in die Weboberfläche
-integriert, **müssen aber nicht**: Sie laufen genauso auf einem anderen Rechner. So bleibt die Zentrale ein möglichst
-schlankes Funk-Gateway.
+integriert, **müssen aber nicht**: Sie laufen genauso auf einem anderen Rechner.
 
 - [Homematic Manager](https://github.com/hobbyquaker/homematic-manager) - Geräte und Direktverknüpfungen verwalten;
   auch als Anwendung für Windows, macOS und Linux
 - [OpenCCU-Loom](https://github.com/SukramJ/openccu-loom) - Geräte und Direktverknüpfungen verwalten, Home Assistant,
   MQTT, Matter, MCP server, Alarmsystem und vieles mehr
 
+### Automatisieren
+
+Für Automationen gibt es mehrere Wege nebeneinander. Welcher passt, entscheidet jeder selbst, auch mehrere zugleich:
+
+- **Wenn-Dann-Programme:** [Logic](https://github.com/openccu-lite/lite-addon-logic) (Addon, Beta), Bedingungen und
+  Aktivitäten aus Auswahllisten wie auf der CCU; übernimmt bestehende Programme und Systemvariablen einer CCU
+- **Flows in Node-RED:** [RedMatic](https://github.com/rdmtc/RedMatic) (Addon)
+- **Externe Software:** Home Assistant mit [Homematic(IP) Local](https://github.com/SukramJ/homematicip_local) und
+  [OpenCCU-Loom](https://github.com/SukramJ/openccu-loom), ioBroker mit [ioBroker.hm-rpc](https://github.com/ioBroker/ioBroker.hm-rpc),
+  Node-RED mit [node-red-contrib-ccu](https://github.com/rdmtc/node-red-contrib-ccu#openccu-lite), …
+
 ### Weitere Addons
 
-- [RedMatic](https://github.com/rdmtc/RedMatic) - Node-RED: Automation, Anbindung anderer Systeme, MQTT, Home
-  Assistant, HomeKit, Matter und vieles mehr
 - [hm2mqtt.js](https://github.com/hobbyquaker/hm2mqtt.js) - MQTT-Anbindung, Home Assistant Auto Discovery, folgt der
   Spec 2.0 von [mqtt-smarthome](https://github.com/mqtt-smarthome/mqtt-smarthome)
 - [ccu-addon-mui](https://github.com/firsttris/ccu-addon-mui) - Geräte und Direktverknüpfungen verwalten, moderne
@@ -118,7 +134,9 @@ Die Releases liegen unter [github.com/openccu-lite/openccu-lite/releases](https:
 
 In der OpenCCU-WebUI unter *Einstellungen → Systemsteuerung → Zentralen-Wartung → Software-Update durchführen* die
 `openccu-lite-<produkt>-<version>.zip` hochladen, von einer originalen CCU3-Firmware die `-ccu3.tgz`. Anlernungen,
-Schlüssel, Addons, Namen, Räume und Gewerke werden übernommen, WebUI-Programme und Systemvariablen entfallen ersatzlos.
+Schlüssel, Addons, Namen, Räume und Gewerke werden übernommen. Programme und Systemvariablen bleiben in der
+ReGa-Datenbank der CCU auf dem System und lassen sich mit dem Addon [Logic](https://github.com/openccu-lite/lite-addon-logic)
+übernehmen; Homematic-Scripte und Addons, die die ReGa brauchen (etwa CUxD), entfallen.
 Für den Weg zurück unbedingt vorher ein Backup anlegen! Noch schneller zurück geht es mit einem Snapshot der VM oder
 einer Kopie der SD-Karte vor dem Update ([wie](docs/switching.de.md#zuerst-eine-kopie-des-ganzen-systems)). Dieses
 Update über das bestehende System ist der empfohlene Weg; eine Neuinstallation mit dem Import des alten Backups ist für
@@ -159,6 +177,8 @@ Beta- und Release-Candidate-Versionen) oder **dev** (alles, auch Entwicklungsst�
 **Erste Schritte**
 - [Rundgang durch die Weboberfläche](docs/walkthrough/README.md): jede Seite mit Bild
 - [Wechsel von und zu OpenCCU](docs/switching.de.md)
+- [Logic: Programme und Systemvariablen](https://github.com/openccu-lite/lite-addon-logic/blob/main/docs/de/handbuch.md),
+  mit einem Kapitel für den Umstieg von einer CCU (Beta)
 - [ioBroker: von einer CCU zu openccu-lite](docs/iobroker.de.md): der openccu-lite-Modus von hm-rpc, die Objekte bleiben
 - [Empfehlungen](docs/recommendations.de.md)
 - [Was sich gegenüber OpenCCU ändert](docs/aenderungen.md)
