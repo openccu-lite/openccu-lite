@@ -259,6 +259,14 @@ breached passwords ([security-asvs.md](security-asvs.md) V6.2 says why).
   `https://<host>/` to `https://<host>.<domain>/` with a `302`, only while the certificate covers the full name.
 - **One open route outside `/api`**: `/.well-known/acme-challenge/<token>` answers only the tokens of an order in
   flight.
+- **The recovery system** serves its menu on port 80 over plain HTTP, as always, and - when the system's
+  certificate is usable - on 443 with that same certificate, so a browser that trusts the system by its name keeps
+  reaching it during an update (a second lighttpd beside the one on port 80, which never depends on it). The
+  certificate is copied into the recovery's RAM with hard time limits, size-capped and checked (certificate, key,
+  the key belonging to the certificate); a missing, broken or unreadable one, or a userfs that hangs, means HTTP
+  only. The recovery never creates a certificate, sends no HSTS and no redirect, and its menu needs no login, as
+  before: whoever reaches it on the network reaches the system's storage. The session cookie a browser sends it is
+  not read and not logged.
 
 ## Addons and confinement
 

@@ -161,8 +161,14 @@ jobs:
         run: sh scripts/testcases/lite-userfs-grow-test.sh
       - name: The recovery removes an upload that fwprepare refused (fwinstall.sh in a container)
         run: sh scripts/testcases/lite-fwprepare-cleanup-test.sh
-      - name: The recovery answers 503 on the API and the addons (lighttpd in a container)
+      - name: The recovery answers 503 on the API and the addons, HTTPS never costs port 80 (lighttpd in a container)
         run: sh scripts/testcases/lite-recovery-lighttpd-test.sh
+      - name: The recovery's 503 JSON says how far an update has got (fixtures, garbage included)
+        run: sh scripts/testcases/lite-recovery-status-test.sh
+      - name: The recovery's HTTPS instance - every unusable certificate means HTTP only, at once
+        # S51lighttpd-ssl with mocks for lighttpd and start-stop-daemon; the same file as the
+        # upstream branch's (scripts/testcases/build/, upstream's unittest style)
+        run: python3 scripts/testcases/build/test_recovery_https.py -v
       - name: The update packages' EULA carries openccu-lite's preamble
         run: sh scripts/testcases/lite-eula-test.sh
       - name: The daily upstream version check decides as its rule says (offline, fixtures)

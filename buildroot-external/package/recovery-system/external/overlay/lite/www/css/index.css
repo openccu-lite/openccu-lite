@@ -1,0 +1,161 @@
+/*
+ * openccu-lite: the recovery system's page in openccu-lite's look - this file and the
+ * logo (img/homematic_logo_small.png, img/openccu-lite-dark.png) replace upstream's by path from
+ * the recovery's overlay/lite; upstream's index.cgi is not edited. CSS only, no script: the page
+ * works without this file (then it is upstream's plain page with the logo), and a property an old
+ * browser does not know is just ignored.
+ *
+ * The colours are occulite-ui's design tokens (src/lib/css/tokens.css; --hmm-* there), copied as
+ * values: light by default, dark under prefers-color-scheme. Fonts: the system's, as the kit's.
+ */
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --bg-sunken: #f8f8f8;
+  --header-bg: #f3f3f3;
+  --control-bg: #f0f0f0;
+  --control-bg-hover: #e4e4e4;
+  --input-bg: #ffffff;
+  --border: #cecece;
+  --fg: #3b3b3b;
+  --fg-muted: #6d6d6d;
+  --accent: #0070c1;
+  --accent-bg: #e2eefa;
+  --accent-fg: #ffffff;
+  --warn: #a06800;
+  --radius: 3px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1f26;
+    --bg-sunken: #171a20;
+    --header-bg: #212630;
+    --control-bg: #2e3542;
+    --control-bg-hover: #39414f;
+    --input-bg: #353d4a;
+    --border: #363e4b;
+    --fg: #ccd2dc;
+    --fg-muted: #8b94a3;
+    --accent: #569cd6;
+    --accent-bg: #253b52;
+    --accent-fg: #1b1f26;
+    --warn: #cca700;
+  }
+}
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* the header: the logo and the title on the bar, a hairline below */
+#webuilaoder_background {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+}
+#webuilaoder_background > div:first-child { flex: none; line-height: 0; }
+#webuilaoder_background img {
+  position: static !important;
+  float: none !important;
+  margin: 0 !important;
+  height: 32px;
+  width: auto;
+}
+@media (prefers-color-scheme: dark) {
+  /* the white wordmark: the light one stays in the page for a browser without this file */
+  #webuilaoder_background > div:first-child {
+    background: url(../img/openccu-lite-dark.png) no-repeat left center;
+    background-size: contain;
+  }
+  #webuilaoder_background img { visibility: hidden; }
+}
+#webuilaoder_background > div + div { flex: 1; text-align: left !important; }
+h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--fg);
+}
+#webuilaoder_background hr { display: none; }
+hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  height: 0;
+  margin: 10px 0;
+  color: var(--border);
+}
+
+/* the menu: one column of buttons, centred */
+table { margin: 16px auto; border-collapse: collapse; }
+td { padding: 3px 0; }
+p { font-weight: normal; margin: 8px 0; }
+td > p:first-child, td > form > p:first-child { font-weight: 600; }
+
+.NavButton,
+input[type='submit'],
+input[type='button'] {
+  box-sizing: border-box;
+  width: 260px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--control-bg);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+.NavButton:hover,
+input[type='submit']:hover,
+input[type='button']:hover { background: var(--control-bg-hover); }
+.NavButton:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type='submit'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+input[type='submit']:hover { filter: brightness(1.08); background: var(--accent); }
+
+input[type='text'],
+input[type='file'],
+select {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.infoPanel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  padding: 10px 14px;
+  color: var(--fg-muted) !important;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, Menlo, Monaco, monospace;
+  font-size: 13px;
+}
+
+/* the question before a factory or network reset: NO and YES side by side */
+#confirmAction h1 { color: var(--warn) !important; font-size: 18px; margin: 20px 0; }
+#confirmAction input { width: 120px; min-width: 0; margin-right: 0 !important; margin: 0 8px; }
+
+.hidden { display: none; }
+
+@media (max-width: 480px) {
+  .NavButton, input[type='submit'], input[type='button'] { width: 100%; min-width: 220px; }
+  #confirmAction input { width: 100px; min-width: 0; }
+  td { max-width: calc(100vw - 32px); overflow-wrap: anywhere; }
+  #webuilaoder_background { gap: 10px; padding: 8px 12px; }
+  #webuilaoder_background img { height: 26px; }
+  h1 { font-size: 16px; }
+}

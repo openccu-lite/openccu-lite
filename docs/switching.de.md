@@ -297,7 +297,8 @@ herunterladen (für OpenCCU oder eine CCU3)* verwenden, oder sie auf einem PC en
 **Mit eingeschaltetem HSTS** (System → Zertifikat): HSTS ausschalten **und danach das System in jedem verwendeten
 Browser einmal unter seinem Namen öffnen**, bevor OpenCCU installiert wird. Das Hochladen des OpenCCU-Pakets schaltet
 HSTS von selbst aus, und die Status-Seite nennt dann die zu öffnenden Namen. Ein Browser, der das verpasst hat,
-verweigert unter diesem Namen bis zu sieben Tage lang die HTTP-Seite des Recovery und das Zertifikat von OpenCCU.
+verweigert unter diesem Namen bis zu sieben Tage lang das Zertifikat von OpenCCU, und auch die Seite des Recovery,
+wenn das Recovery kein HTTPS bieten kann (kein brauchbares Zertifikat, oder ein Recovery-System vor 2.0.0).
 `http://<IP-Adresse>/` funktioniert immer.
 
 ## Der Ausweg über das Neuflashen

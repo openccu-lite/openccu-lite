@@ -281,8 +281,9 @@ Backup page, or decrypt it on a PC: `age -d -i key.txt -o backup.sbk backup.sbk.
 
 **With HSTS on** (System → Certificate): switch HSTS off **and then open the system once by its name in every
 browser you use**, before installing OpenCCU. Uploading OpenCCU's package switches HSTS off by itself, and the
-Status page then lists the names to open. A browser that missed this refuses the recovery's plain HTTP page and
-OpenCCU's own certificate under that name for up to seven days. `http://<IP address>/` always works.
+Status page then lists the names to open. A browser that missed this refuses OpenCCU's own certificate under that
+name for up to seven days, and the recovery's page as well when the recovery cannot serve HTTPS (no usable
+certificate, or a recovery system older than 2.0.0). `http://<IP address>/` always works.
 
 ## The reflash fallback
 
