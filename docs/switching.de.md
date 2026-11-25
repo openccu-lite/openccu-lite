@@ -13,7 +13,8 @@ bekommt ein laufendes OpenCCU mit Anlernungen und Schlüsseln, aber ohne Namen, 
 In der WebUI von OpenCCU oder der CCU3: Einstellungen → Systemsteuerung → Zentralen-Wartung → Software-Update
 durchführen, das Paket (unten) hochladen, bestätigen, neu starten lassen. Anlernungen, Schlüssel, die
 Interface-Konfiguration und die Addons bleiben in `/usr/local`. Beim ersten Start übernimmt das System die Namen,
-Räume und Gewerke aus der ReGa-Datenbank und fragt nach einem Administrator-Passwort.
+Räume und Gewerke aus der ReGa-Datenbank und fragt nach einem Administrator-Passwort. Die Programme und
+Systemvariablen bleiben in dieser Datenbank, die das System aufbewahrt: Das Addon [Logic](https://github.com/openccu-lite/lite-addon-logic) übernimmt sie.
 
 **Dieses Update über das bestehende System ist der empfohlene Weg**, nach einer
 [Kopie des ganzen Systems](#zuerst-eine-kopie-des-ganzen-systems): einem Snapshot oder Klon der VM, einer Kopie der
@@ -38,16 +39,18 @@ per [Import seiner Sicherung](#geräte-in-eine-neuinstallation-übernehmen) dazu
 ### Der Platz, den das Update braucht
 
 Das Recovery entpackt das Update auf dem userfs (`/usr/local`), bevor es etwas schreibt. **Nötig sind mindestens
-2,8 GB frei.** Die WebUI zeigt das unter *Software-Update durchführen* (*Verfügbarer Speicherplatz*), über SSH
-`df -h /usr/local`. Alte Backups unter `/usr/local/tmp` und große Addon-Daten sind die üblichen Platzfresser; vorher
-wegräumen.
+2,8 GB frei.** Die WebUI von OpenCCU zeigt das unter *Software-Update durchführen* (*Verfügbarer Speicherplatz*),
+über SSH `df -h /usr/local`. Die Firmware der CCU3 zeigt den freien Platz dort nicht an. Alte Backups unter
+`/usr/local/tmp` und große Addon-Daten sind die üblichen Platzfresser; vorher wegräumen.
+
+<!-- Open until the next release candidate is tried on a stock CCU3: on 3.89.11 its userfs is 2.0 GB with about 1.7 GB free, below the figure above, and its WebUI shows no free space; whether the -ccu3.tgz goes through there (the recovery grows the userfs to the end of the card) is not known yet. Correct this section then. -->
 
 ### Vor dem Wechsel prüfen
 
 - **Ein Backup**, angelegt unter Einstellungen → Systemsteuerung → Sicherheit → Backup erstellen und vom System
   heruntergeladen.
 - **Eine Kopie des ganzen Systems:** ein Snapshot oder Klon der VM, eine Kopie der SD-Karte (unten).
-- **2,8 GB frei** auf dem userfs.
+- **2,8 GB frei** auf dem userfs (OpenCCU zeigt es an, siehe oben).
 - **Das richtige Paket** (Tabelle oben), seine `.sha256` geprüft.
 - **Zugang, falls etwas schiefgeht:** die Adresse des Systems notiert (ein fehlgeschlagenes Update kann mit einer neuen
   DHCP-Adresse zurückkommen), SD-Karte oder Konsole der VM erreichbar.
@@ -121,7 +124,8 @@ Auf der Seite Sicherung prüft *Sicherung einspielen oder importieren* die hochg
   - klassisches RPC wie auf dem alten System (nie angehakt; siehe
     [Was sich beim ersten Start ändert](#was-sich-beim-ersten-start-ändert)).
 
-  *Was auf dem alten System zurückbleibt* nennt den Rest: Programme, Systemvariablen und Skripte der ReGa, die
+  *Was auf dem alten System zurückbleibt* nennt den Rest: Programme, Systemvariablen und Skripte der ReGa (Programme
+  und Systemvariablen übernimmt das Addon [Logic](https://github.com/openccu-lite/lite-addon-logic) aus derselben `.sbk`), die
   Benutzer der alten WebUI, die Netzwerkeinstellungen außer dem Hostnamen, die Firewall außer klassischem RPC, das
   Web-Zertifikat, SSH-Schlüssel und das root-Passwort, Zeitzone, Zeitserver und Standort, die Protokollstufen, crontab
   und monit, was ein Addon außerhalb seiner eigenen Verzeichnisse ablegt, den NEO Server von mediola und alles andere
@@ -170,9 +174,12 @@ siehe [bekannte-probleme.md](bekannte-probleme.md#hmip-geräte-nach-einem-neusta
   `<Typ> <Adresse>` tragen, werden ausgelassen. Später bringt sie eine auf der Seite Sicherung hochgeladene
   `.sbk`: der Import übernimmt sie immer, und auf einem System mit angelernten Geräten übernimmt *Namen aus dieser
   Sicherung importieren* sie allein.
-- **Nicht übernommen:** Programme, Systemvariablen, Alarme, Favoriten, Diagramme. Die Automatisierung wandert zu
-  Node-RED (RedMatic), Home Assistant, ioBroker oder was man sonst schon einsetzt; siehe
-  [Externe Clients nach dem Wechsel](#externe-clients-nach-dem-wechsel).
+- **Programme und Systemvariablen** kommen mit dem Addon [Logic](https://github.com/openccu-lite/lite-addon-logic) (im Addon-Katalog) mit: Es übernimmt sie
+  aus der ReGa-Datenbank, die das System aufbewahrt (unten), oder aus einer `.sbk`, Alarmvariablen eingeschlossen,
+  und zeigt vorher in einem Bericht, was es übernimmt. Ein Programm mit einem HM-Script kommt inaktiv: Logic führt
+  keine Scripte aus. Aufgaben, die ein Script brauchen, wandern zu Node-RED (RedMatic), Home Assistant, ioBroker oder
+  was man sonst schon einsetzt; siehe [Externe Clients nach dem Wechsel](#externe-clients-nach-dem-wechsel).
+- **Nicht übernommen:** HM-Scripte, Favoriten, Diagramme.
 - **Addons:** die im [Katalog](https://github.com/openccu-lite/occulited/blob/master/docs/catalog-format.md)
   funktionieren. Addons, die die ReGa brauchen (CUxD, die XML-API, …), werden deaktiviert und als *deaktiviert,
   inkompatibel* geführt. Addons mit Binaries für eine andere Architektur stehen als *deaktiviert, braucht ein Update*
@@ -182,6 +189,11 @@ siehe [bekannte-probleme.md](bekannte-probleme.md#hmip-geräte-nach-einem-neusta
   CCU3 geschriebenen schlagen hier meist fehl; die Seite Zusatzsoftware zeigt dann *Von der CCU übernommen* mit der
   letzten Log-Zeile des Skripts und bietet *rc.d-Eintrag entfernen* an.
 - **Der NEO Server von mediola** läuft ohne die ReGa nicht und wird abgeschaltet.
+- **Ein System ohne HmIP-Funkmodul** (eine OpenCCU-VM ohne Stick, die nur ihre virtuellen Geräte betrieb): HmIP-RF wird
+  beim ersten Start auf *Keins* gestellt, damit die Heizungsgruppen und die anderen virtuellen Geräte weiterlaufen wie
+  auf OpenCCU. Ist ein Funkmodul angeschlossen, stellen Sie es unter System → Schnittstellen wieder auf *Automatisch*.
+  Ein System, das ein Funkmodul hatte (seine HmIP-Identität liegt auf dem Userfs), bleibt auf *Automatisch*, auch wenn
+  das Funkmodul beim ersten Start nicht gefunden wird.
 - **Klassisches RPC wird eingeschaltet, wenn die Firewall von OpenCCU die XMLRPC-Ports freigab** (`full` oder
   `restricted` in `firewall.conf`), damit die Programme, die die CCU auf 2001, 2010, 9292 oder 2000 ansprechen,
   weiterlaufen: die Klartext- und die TLS-Ports, **ohne Anmeldung**. Die Firewall-Regeln behalten ihre Quellen: die
@@ -199,8 +211,8 @@ siehe [bekannte-probleme.md](bekannte-probleme.md#hmip-geräte-nach-einem-neusta
 - **Die Altlasten werden entfernt, sobald die Namen importiert sind:** die `.bak` von `homematic.regadom`, die
   `measurement` und `userprofiles` der WebUI, `etc/config/rega` und der NEO Server. Die Journal-Zeile
   `ccu leftovers removed` nennt sie. Funk-Identität, Schlüssel, Interface-Konfiguration und Addons bleiben.
-- **Die ReGa-Datenbank selbst (`homematic.regadom`) bleibt,** damit ihre Programme und Systemvariablen später von
-  einem Addon importiert werden können. Die Seite Sicherung zeigt sie im Panel *ReGa-Datenbank der CCU* und entfernt
+- **Die ReGa-Datenbank selbst (`homematic.regadom`) bleibt,** damit das Addon [Logic](https://github.com/openccu-lite/lite-addon-logic) ihre Programme und
+  Systemvariablen übernehmen kann, gleich oder später. Die Seite Sicherung zeigt sie im Panel *ReGa-Datenbank der CCU* und entfernt
   sie auf Wunsch; Sicherungen enthalten sie.
 - **Die Diagrammdaten werden einmalig beim ersten Start entfernt:** `measurement/` auf dem USB-Stick und
   `/usr/local/etc/config/measurement`. openccu-lite hat keine Diagramme (keine Seite, um sie einzurichten oder
@@ -253,7 +265,9 @@ lieferte.
   die darauf umgestellt wird, behält ihre Objekt-IDs; hm-rega und CUxD fallen weg. Schritt für Schritt:
   [iobroker.de.md](iobroker.de.md). Bis zur Umstellung arbeitet eine klassische Instanz über klassisches RPC weiter
   (oben).
-- **Was die ReGa braucht, geht nicht:** Systemvariablen, Programme, HM-Script, die JSON-RPC-API der WebUI
+- **Programme und Systemvariablen** des Addons [Logic](https://github.com/openccu-lite/lite-addon-logic) sind Geräte seiner Schnittstelle `Logic`, per XML-RPC
+  und lite-rpc: Die Clients oben lesen und setzen Variablen und starten Programme darüber, nicht über die ReGa.
+- **Was die ReGa selbst braucht, geht nicht:** HM-Script, die JSON-RPC-API der WebUI
   (`/api/homematic.cgi`), die ReGa-Ports 1999 und 8181, und damit
   [ioBroker.hm-rega](https://github.com/ioBroker/ioBroker.hm-rega), CUxD und das XML-API-Addon. Namen, Räume und
   Gewerke liefert die Metadaten-API des Systems; [porting-from-rega.md](porting-from-rega.md) (englisch) ordnet den
