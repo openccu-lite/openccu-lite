@@ -11,7 +11,7 @@
 #
 ################################################################################
 
-OCCULITED_VERSION = a1fc2975c2147a3de5941a3eb26252fb180a1a5e
+OCCULITED_VERSION = f9a14b4a29c58746d2a03ab523c41025c20afc45
 OCCULITED_SITE = $(call github,openccu-lite,occulited,$(OCCULITED_VERSION))
 OCCULITED_LICENSE = GPL-3.0-only
 OCCULITED_LICENSE_FILES = LICENSE
