@@ -132,15 +132,18 @@ Die Releases liegen unter [github.com/openccu-lite/openccu-lite/releases](https:
 
 ## Wechsel von (Open)CCU zu openccu-lite
 
-In der OpenCCU-WebUI unter *Einstellungen → Systemsteuerung → Zentralen-Wartung → Software-Update durchführen* die
-`openccu-lite-<produkt>-<version>.zip` hochladen, von einer originalen CCU3-Firmware die `-ccu3.tgz`. Anlernungen,
-Schlüssel, Addons, Namen, Räume und Gewerke werden übernommen. Programme und Systemvariablen bleiben in der
-ReGa-Datenbank der CCU auf dem System und lassen sich mit dem Addon [Logic](https://github.com/openccu-lite/lite-addon-logic)
-übernehmen; Homematic-Scripte und Addons, die die ReGa brauchen (etwa CUxD), entfallen.
-Für den Weg zurück unbedingt vorher ein Backup anlegen! Noch schneller zurück geht es mit einem Snapshot der VM oder
-einer Kopie der SD-Karte vor dem Update ([wie](docs/switching.de.md#zuerst-eine-kopie-des-ganzen-systems)). Dieses
-Update über das bestehende System ist der empfohlene Weg; eine Neuinstallation mit dem Import des alten Backups ist für
-neue Hardware. Alles Weitere: [Wechsel von und zu OpenCCU](docs/switching.de.md).
+Der empfohlene Weg ist ein Update über das bestehende System.
+
+- **Update:** In der WebUI unter *Einstellungen → Systemsteuerung → Zentralen-Wartung → Software-Update durchführen*
+  die `openccu-lite-<produkt>-<version>.zip` hochladen, auf einer originalen CCU3 die `-ccu3.tgz`.
+- **Kommt mit:** Anlernungen, Schlüssel, Addons, Namen, Räume und Gewerke. Programme und Systemvariablen übernimmt das
+  Addon [Logic](https://github.com/openccu-lite/lite-addon-logic).
+- **Entfällt:** Homematic-Scripte und Addons, die die ReGa brauchen, etwa CUxD.
+- **Vorher sichern:** unbedingt ein Backup, für den schnellen Weg zurück zusätzlich ein Snapshot der VM oder eine Kopie
+  der SD-Karte ([wie](docs/switching.de.md#zuerst-eine-kopie-des-ganzen-systems)).
+- **Neue Hardware:** neu installieren und das Backup des alten Systems importieren.
+
+Alles Weitere, auch der Weg zurück: [Wechsel von und zu OpenCCU](docs/switching.de.md).
 
 ## Updates
 

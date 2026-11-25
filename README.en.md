@@ -128,15 +128,18 @@ The releases are at [github.com/openccu-lite/openccu-lite/releases](https://gith
 
 ## Switching from (Open)CCU to openccu-lite
 
-In the OpenCCU WebUI under *Settings → Control panel → CCU maintenance → Perform software update*, upload
-`openccu-lite-<product>-<version>.zip`; from an original CCU3 firmware, the `-ccu3.tgz`. Pairings, keys, addons, names,
-rooms and functions are taken over. Programs and system variables stay on the system in the CCU's ReGa database
-and can be imported with the addon [Logic](https://github.com/openccu-lite/lite-addon-logic); Homematic scripts and addons
-that need the ReGa (such as CUxD) are dropped. Take a backup
-first, it is the way back! Quicker still is a snapshot of the VM or a copy of the SD card before the update
-([how](docs/switching.md#a-copy-of-the-whole-system-first)). This update over the existing system is the recommended
-way; a new installation with an import of the old backup is for new hardware. Everything else:
-[Switching from and to OpenCCU](docs/switching.md).
+The recommended way is an update over the existing system.
+
+- **Update:** in the WebUI under *Settings → Control panel → CCU maintenance → Perform software update*, upload
+  `openccu-lite-<product>-<version>.zip`; on an original CCU3, the `-ccu3.tgz`.
+- **Comes along:** pairings, keys, addons, names, rooms and functions. Programs and system variables are taken over by
+  the addon [Logic](https://github.com/openccu-lite/lite-addon-logic).
+- **Dropped:** Homematic scripts and addons that need the ReGa, such as CUxD.
+- **Back up first:** a backup is a must; for a quick way back, also take a snapshot of the VM or a copy of the SD card
+  ([how](docs/switching.md#a-copy-of-the-whole-system-first)).
+- **New hardware:** install fresh and import the old system's backup.
+
+Everything else, including the way back: [Switching from and to OpenCCU](docs/switching.md).
 
 ## Updates
 
