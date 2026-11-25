@@ -70,12 +70,15 @@ endef
 
 # The catalogue from the same archive as the binary. The guard is for a pin older than the
 # commit that added catalog/ (occulited 594ede7): such an image carries no offline copy and
-# occulited reads the published file alone; it goes with the next pin.
+# occulited reads the published file alone; it goes with the next pin. catalog/manifests/ may be
+# empty or absent (occulited task 188 took its three adapter manifests out): the loop skips the
+# unexpanded glob, and /etc/occulite/manifests stays an empty directory.
 define OCCULITED_INSTALL_CATALOG
 	if [ -f $(@D)/catalog/catalog.json ]; then \
 		$(INSTALL) -D -m 0644 $(@D)/catalog/catalog.json $(TARGET_DIR)/etc/occulite/catalog.json; \
 		mkdir -p $(TARGET_DIR)/etc/occulite/manifests; \
 		for m in $(@D)/catalog/manifests/*.json; do \
+			[ -f "$$m" ] || continue; \
 			$(INSTALL) -m 0644 $$m $(TARGET_DIR)/etc/occulite/manifests/; \
 		done; \
 	fi
