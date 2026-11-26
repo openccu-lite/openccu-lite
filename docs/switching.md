@@ -2,6 +2,9 @@
 
 *English — the German version is [switching.de.md](switching.de.md).*
 
+**Step by step with screenshots** (in German): [Umstieg von einer CCU3 oder OpenCCU auf openccu-lite](umstieg.md), from
+the backup and the update to Logic, RedMatic, ioBroker, Home Assistant and Node-RED. This page is the reference.
+
 **Take a backup (`.sbk`) before you switch, and keep it. It is the way back**, and a
 [copy of the whole system](#a-copy-of-the-whole-system-first) is the quicker one. After its first start
 openccu-lite removes the WebUI's data from the system and keeps the CCU's ReGa database until it is removed (see
@@ -43,7 +46,8 @@ free.** OpenCCU's WebUI shows it under *Perform software update* (*Available use
 `df -h /usr/local`. The CCU3's firmware does not show the free space there. Old backups under `/usr/local/tmp` and
 large addon data are the usual culprits; remove them first.
 
-<!-- Open until the next release candidate is tried on a stock CCU3: on 3.89.11 its userfs is 2.0 GB with about 1.7 GB free, below the figure above, and its WebUI shows no free space; whether the -ccu3.tgz goes through there (the recovery grows the userfs to the end of the card) is not known yet. Correct this section then. -->
+**A CCU3** grows its userfs to the end of the card during the update when there is room behind it. A CCU3 with
+3.89.11 on a 16 GB card had only 1.7 GB free in the test, and the update went through.
 
 ### Check before switching
 
@@ -234,8 +238,12 @@ Programs elsewhere on the network that talked to the CCU keep its devices, but l
   such a token lost the events and commands without a word. The simplest way is *Pair with the system* in the
   connection node: an administrator compares its code on the Status page and approves it, and the token and the
   certificate's fingerprint are filled in. API tokens made by hand are on System → Remote access. RedMatic on the
-  system needs no token (9.15.1 or later). The nodes `ccu-sysvar`, `ccu-program`, `ccu-script` and `ccu-poll` answer
-  every message with an error.
+  system needs no token (9.15.1 or later). **From 4.14.0** (in RedMatic from 10.0.0) the nodes `ccu-sysvar` and
+  `ccu-program` find Logic's system variables and programs by their names, as on a CCU; before, they answered every
+  message with an error. `ccu-script` answers every message with an error, `ccu-poll` has nothing to poll. Step by
+  step (German), including *TLS/SSL* for an encrypted pairing:
+  [Node-RED auf einem anderen Rechner](umstieg.md#node-red-auf-einem-anderen-rechner-node-red-contrib-ccu) and
+  [RedMatic auf dem System](umstieg.md#redmatic-auf-dem-system).
 - **Home Assistant with [Homematic(IP) Local](https://github.com/SukramJ/homematicip_local)** (`homematicip_local`):
   its direct connection needs the CCU's JSON-RPC (the ReGa) for its login, the names and the rooms, which openccu-lite
   does not have. It connects through [OpenCCU-Loom](https://github.com/SukramJ/openccu-loom), as an addon on
@@ -245,7 +253,8 @@ Programs elsewhere on the network that talked to the CCU keep its devices, but l
   connection's `username` and `password`, and its start then aborts with
   `box_token is the only credential behind the box`. The way out: stop Home Assistant Core, make a copy of
   `.storage/core.config_entries`, delete the two keys `username` and `password` from the integration's entry, and
-  start Home Assistant again. This is the integration's behaviour; newer versions may handle it differently.
+  start Home Assistant again. This is the integration's behaviour; newer versions may handle it differently. A new entry step by step
+  (German): [Home Assistant mit Homematic(IP) Local](umstieg.md#home-assistant-mit-homematicip-local).
 - **ioBroker:** [ioBroker.hm-rpc](https://github.com/ioBroker/ioBroker.hm-rpc) from 4.3.0 has the daemon
   *openccu-lite*: one instance per interface as with a CCU, through the system's lite-rpc on the web port, paired in
   the instance settings, with names, rooms and functions from the system and no callback. An existing instance switched

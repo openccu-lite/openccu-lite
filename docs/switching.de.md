@@ -2,6 +2,9 @@
 
 *Deutsch — die englische Fassung ist [switching.md](switching.md).*
 
+**Schritt für Schritt mit Bildern:** [Umstieg von einer CCU3 oder OpenCCU auf openccu-lite](umstieg.md), vom Backup über
+das Update bis zu Logic, RedMatic, ioBroker, Home Assistant und Node-RED. Diese Seite ist die Referenz dazu.
+
 **Vor dem Wechsel ein Backup (`.sbk`) anlegen und aufbewahren. Es ist der Weg zurück**, und eine
 [Kopie des ganzen Systems](#zuerst-eine-kopie-des-ganzen-systems) ist der schnellere. Nach seinem ersten
 Start entfernt openccu-lite die Daten der WebUI vom System und behält die ReGa-Datenbank der CCU, bis sie entfernt wird (siehe
@@ -43,7 +46,8 @@ Das Recovery entpackt das Update auf dem userfs (`/usr/local`), bevor es etwas s
 über SSH `df -h /usr/local`. Die Firmware der CCU3 zeigt den freien Platz dort nicht an. Alte Backups unter
 `/usr/local/tmp` und große Addon-Daten sind die üblichen Platzfresser; vorher wegräumen.
 
-<!-- Open until the next release candidate is tried on a stock CCU3: on 3.89.11 its userfs is 2.0 GB with about 1.7 GB free, below the figure above, and its WebUI shows no free space; whether the -ccu3.tgz goes through there (the recovery grows the userfs to the end of the card) is not known yet. Correct this section then. -->
+**Eine CCU3** vergrößert ihren Datenbereich beim Update selbst bis zum Ende der Karte, wenn dahinter Platz ist. Eine
+CCU3 mit 3.89.11 auf einer 16-GB-Karte hatte im Test nur 1,7 GB frei, und das Update ging durch.
 
 ### Vor dem Wechsel prüfen
 
@@ -124,7 +128,7 @@ Auf der Seite Sicherung prüft *Sicherung einspielen oder importieren* die hochg
   - klassisches RPC wie auf dem alten System (nie angehakt; siehe
     [Was sich beim ersten Start ändert](#was-sich-beim-ersten-start-ändert)).
 
-  *Was auf dem alten System zurückbleibt* nennt den Rest: Programme, Systemvariablen und Skripte der ReGa (Programme
+  *Was auf dem alten System zurückbleibt* nennt den Rest: Programme, Systemvariablen und Scripte der ReGa (Programme
   und Systemvariablen übernimmt das Addon [Logic](https://github.com/openccu-lite/lite-addon-logic) aus derselben `.sbk`), die
   Benutzer der alten WebUI, die Netzwerkeinstellungen außer dem Hostnamen, die Firewall außer klassischem RPC, das
   Web-Zertifikat, SSH-Schlüssel und das root-Passwort, Zeitzone, Zeitserver und Standort, die Protokollstufen, crontab
@@ -185,9 +189,9 @@ siehe [bekannte-probleme.md](bekannte-probleme.md#hmip-geräte-nach-einem-neusta
   inkompatibel* geführt. Addons mit Binaries für eine andere Architektur stehen als *deaktiviert, braucht ein Update*
   da; *Installieren* / *Aktualisieren* im Katalog holt den passenden Build
   ([addons.md](addons.md#architecture-and-addon-binaries)). Deinstalliert wird nichts.
-- **Skripte in `/usr/local/etc/config/rc.d/`** kommen als Addons mit und werden gestartet, auch eigene. Die für die
+- **Scripte in `/usr/local/etc/config/rc.d/`** kommen als Addons mit und werden gestartet, auch eigene. Die für die
   CCU3 geschriebenen schlagen hier meist fehl; die Seite Zusatzsoftware zeigt dann *Von der CCU übernommen* mit der
-  letzten Log-Zeile des Skripts und bietet *rc.d-Eintrag entfernen* an.
+  letzten Log-Zeile des Scripts und bietet *rc.d-Eintrag entfernen* an.
 - **Der NEO Server von mediola** läuft ohne die ReGa nicht und wird abgeschaltet.
 - **Ein System ohne HmIP-Funkmodul** (eine OpenCCU-VM ohne Stick, die nur ihre virtuellen Geräte betrieb): HmIP-RF wird
   beim ersten Start auf *Keins* gestellt, damit die Heizungsgruppen und die anderen virtuellen Geräte weiterlaufen wie
@@ -247,7 +251,12 @@ lieferte.
   kommentarlos. Am einfachsten ist *Pair with the system* im Verbindungsknoten: ein Administrator vergleicht den Code
   auf der Seite Status und gibt ihn frei, Token und Fingerabdruck des Zertifikats werden eingetragen. Von Hand
   angelegte API-Tokens stehen unter System → Fernzugriff. RedMatic auf dem System braucht keinen Token (ab 9.15.1).
-  Die Knoten `ccu-sysvar`, `ccu-program`, `ccu-script` und `ccu-poll` beantworten jede Nachricht mit einem Fehler.
+  **Ab 4.14.0** (in RedMatic ab 10.0.0) finden die Knoten `ccu-sysvar` und `ccu-program` die Systemvariablen und
+  Programme von Logic an ihrem Namen wie auf der CCU; davor beantworteten sie jede Nachricht mit einem Fehler.
+  `ccu-script` beantwortet jede Nachricht mit einem Fehler, `ccu-poll` hat nichts abzufragen. Schritt für Schritt,
+  auch mit *TLS/SSL* für eine verschlüsselte Kopplung:
+  [Node-RED auf einem anderen Rechner](umstieg.md#node-red-auf-einem-anderen-rechner-node-red-contrib-ccu) und
+  [RedMatic auf dem System](umstieg.md#redmatic-auf-dem-system).
 - **Home Assistant mit [Homematic(IP) Local](https://github.com/SukramJ/homematicip_local)** (`homematicip_local`):
   die Direktverbindung braucht für Anmeldung, Namen und Räume das JSON-RPC der CCU (die ReGa), das openccu-lite
   nicht hat. Die Integration verbindet sich über
@@ -258,7 +267,8 @@ lieferte.
   `box_token is the only credential behind the box` ab. Abhilfe: Home Assistant Core anhalten, eine Kopie von
   `.storage/core.config_entries` anlegen, im Eintrag der Integration die beiden Schlüssel `username` und `password`
   löschen und Home Assistant wieder starten. Das ist ein Verhalten der Integration; neuere Versionen können es
-  anders handhaben.
+  anders handhaben. Einen neuen Eintrag Schritt für Schritt zeigt
+  [Home Assistant mit Homematic(IP) Local](umstieg.md#home-assistant-mit-homematicip-local).
 - **ioBroker:** [ioBroker.hm-rpc](https://github.com/ioBroker/ioBroker.hm-rpc) hat ab 4.3.0 den Dämon
   *openccu-lite*: eine Instanz je Schnittstelle wie bei einer CCU, über lite-rpc auf dem Webport des Systems, gekoppelt
   in den Instanzeinstellungen, mit Namen, Räumen und Gewerken vom System und ohne Rückkanal. Eine bestehende Instanz,

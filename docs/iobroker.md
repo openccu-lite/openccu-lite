@@ -6,11 +6,13 @@ This guide is for an ioBroker that talks to a CCU3 or OpenCCU today through
 [ioBroker.hm-rpc](https://github.com/ioBroker/ioBroker.hm-rpc), one instance per interface (BidCos-RF, HmIP-RF, perhaps
 BidCos-Wired, VirtualDevices or CUxD), and usually [ioBroker.hm-rega](https://github.com/ioBroker/ioBroker.hm-rega)
 for names, rooms, system variables and programs. It keeps one hm-rpc instance per interface, as before. The switch of
-the CCU itself is described in [switching.md](switching.md); this page covers the ioBroker side.
+the CCU itself is described in [switching.md](switching.md); this page covers the ioBroker side. The whole way with
+screenshots, from the CCU to the hm-rpc instance for Logic, is in the German
+[step-by-step guide](umstieg.md#iobroker).
 
 The short version: **each existing hm-rpc instance is switched to the daemon *openccu-lite* and paired with the
 system. Its objects keep their ids, and with them history settings, aliases, scripts and visualisations.** hm-rega and
-CUxD go.
+CUxD go; the system variables and programs come from the addon Logic through one more hm-rpc instance.
 
 ## What changes
 
@@ -18,8 +20,9 @@ CUxD go.
   on its web port (HTTPS, 443) with an API token of its own; the events come as a stream the instance opens itself.
   There is no callback any more: no adapter address, no adapter port, no `init`, and nothing to open in a firewall
   towards ioBroker. ioBroker may run behind a router or in a Docker container.
-- **hm-rega goes.** openccu-lite has no ReGa: no system variables, no programs, no HM-Script, no favourites, no
-  diagrams. **Names, rooms and functions** now come from the system's metadata, through hm-rpc itself (the option
+- **hm-rega goes.** openccu-lite has no ReGa: no HM-Script, no favourites, no diagrams. **System variables and
+  programs** are taken over from the CCU's database by the addon [Logic](https://github.com/openccu-lite/lite-addon-logic);
+  ioBroker reaches them through an hm-rpc instance for the interface *Logic* ([step 3](#step-3-remove-hm-rega-and-cuxd)). **Names, rooms and functions** now come from the system's metadata, through hm-rpc itself (the option
   *Take names, rooms and functions from the system*). They are taken over from the CCU's ReGa when it is switched.
 - **CUxD goes.** It needs the ReGa and does not run on openccu-lite; its hm-rpc instance has nothing to connect to.
 - **The devices stay.** The switch keeps the pairings, the keys and the device addresses, so the objects
@@ -80,10 +83,15 @@ Do this for each hm-rpc instance of an interface the system runs (BidCos-RF, HmI
    `BidCos-RF`, *hs485d* is `BidCos-Wired`, *Virtual Devices* is `VirtualDevices`.
 7. **Take names, rooms and functions from the system** is ticked by default; see
    [Rooms and functions](#rooms-and-functions) before you keep it.
-8. Press **Pair**. A six-digit code appears below the button, with a link to the system's Status page.
+8. Press **Pair**. A six-digit code appears below the button, with a link to the system's Status page. (With hm-rpc
+   4.3.2 and admin 8.3.5, ioBroker showed no code in the test, only a spinner; then recognise the request on the Status
+   page by its program and instance.)
 9. On the system's **Status page**, as one of its administrators: the request names the program
    (`ioBroker.hm-rpc`), the instance (`hm-rpc.<n> on <host>`) and the access it asks for (devices: configure, names:
-   read). **Compare the code** with the one in ioBroker, then approve it.
+   read). **Compare the code** with the one in ioBroker, then approve it. **Approve promptly:** in the test the question
+   of step 10 came only when the approval came within about half a minute; otherwise the form stayed empty although the
+   system had accepted the pairing. Then pair once more and revoke the unused token on *System → Remote access* (its
+   *Last used* column stays empty).
 10. ioBroker asks *Save configuration?*: save. The token and the fingerprint of the system's certificate are stored in
     the instance, and it restarts on lite-rpc. Its log says `lite-rpc client is connecting to https://<address> for the
     interface <interface>`, then `Connected`.
@@ -137,15 +145,25 @@ When an instance is deleted, the enums it created stay behind, empty; delete the
 ## Step 3: remove hm-rega and CUxD
 
 - **hm-rega:** delete its instance (*Instances*, the bin icon). Its objects go with it: the system variables and
-  programs under `hm-rega.<n>`. Scripts that read or set them need a new home first.
+  programs under `hm-rega.<n>`. Point scripts that read or set them at the objects of the Logic instance (below) first.
 - **CUxD:** delete its hm-rpc instance.
+
+**System variables and programs from Logic.** Once the addon [Logic](https://github.com/openccu-lite/lite-addon-logic)
+is installed on the system and has taken over the CCU's programs and system variables, it is an interface of its own
+named *Logic*. Add **one more hm-rpc instance** for it (*Adapters*, the *HomeMatic RPC* card, **+**), enter the
+*HomeMatic address*, the daemon *openccu-lite* and *Use HTTPS* as in step 2, save, start the instance and pair it. With
+the token the instance asks the system for its interfaces; **Interface** then offers **Logic** as well: choose it and
+save. The instance creates `hm-rpc.<n>.var-<name>.1.VALUE` for each system variable and `hm-rpc.<n>.prg-<name>.1` with
+`ACTIVE`, `RUN` and `LAST_RUN` for each program; a change in ioBroker sets the variable in Logic and triggers its
+programs, a change in Logic arrives in ioBroker at once. With screenshots (German): [step by step](umstieg.md#iobroker).
 
 | On the CCU (hm-rega) | On openccu-lite with ioBroker |
 | --- | --- |
 | names of devices, channels and datapoints | hm-rpc's names option (above) |
 | rooms and functions | hm-rpc's names option; maintained on the system |
-| system variables | states of your own in ioBroker (`0_userdata.0`) |
-| programs and ReGa scripts | ioBroker scripts (the JavaScript or Blockly adapter), or Node-RED (on the system as [RedMatic](https://github.com/rdmtc/RedMatic), or in ioBroker) |
+| system variables | Logic on the system; in ioBroker the hm-rpc instance for *Logic* (`hm-rpc.<n>.var-<name>.1.VALUE`) |
+| programs | Logic on the system; in ioBroker the hm-rpc instance for *Logic* (`hm-rpc.<n>.prg-<name>.1`) |
+| ReGa scripts (HM-Script) | ioBroker scripts (the JavaScript or Blockly adapter), or Node-RED (on the system as [RedMatic](https://github.com/rdmtc/RedMatic), or in ioBroker); Logic takes a program with a script over as an inactive program |
 | favourites | not carried over; your visualisation's own views |
 | CUxD devices | no replacement on openccu-lite; their task goes to ioBroker adapters of their own |
 | the CCU's service messages (UNREACH, LOWBAT, CONFIG_PENDING) | the datapoints on channel 0 of each device, as before |
@@ -177,6 +195,7 @@ with its name and rooms once they are set on the system. Mind the first limit be
   under *Additional settings* before pairing a device. Objects of devices removed on the system then stay in ioBroker;
   delete them by hand.
 - **Discovery finds systems in its own subnet only;** add an instance by hand for a system elsewhere.
-- **No ReGa:** hm-rega, CUxD, system variables, programs and HM-Script are gone for good (see step 3).
+- **No ReGa:** hm-rega, CUxD and HM-Script are gone for good; system variables and programs come from Logic (see
+  step 3).
 - **hm-rpc older than 4.3.0** has no daemon *openccu-lite*; check the version before converting (see
   [Before you start](#before-you-start)).

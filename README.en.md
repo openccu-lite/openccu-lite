@@ -128,7 +128,9 @@ The releases are at [github.com/openccu-lite/openccu-lite/releases](https://gith
 
 ## Switching from (Open)CCU to openccu-lite
 
-The recommended way is an update over the existing system.
+Step by step with screenshots, with Logic and the connected software (in German):
+[Umstieg von einer CCU3 oder OpenCCU auf openccu-lite](docs/umstieg.md). The recommended way is an update over the
+existing system.
 
 - **Update:** in the WebUI under *Settings → Control panel → CCU maintenance → Perform software update*, upload
   `openccu-lite-<product>-<version>.zip`; on an original CCU3, the `-ccu3.tgz`.
@@ -174,6 +176,8 @@ release candidate versions as well) or **dev** (everything, development builds t
 ## Documentation
 
 **Getting started**
+- [Switching from a CCU3 or OpenCCU, step by step](docs/umstieg.md): with screenshots, with Logic, RedMatic, ioBroker,
+  Home Assistant and Node-RED (German)
 - [Walkthrough of the web interface](docs/walkthrough/README.md): every page with a picture (German)
 - [Switching from and to OpenCCU](docs/switching.md)
 - [Logic: programs and system variables](https://github.com/openccu-lite/lite-addon-logic/blob/main/docs/en/guide.md),

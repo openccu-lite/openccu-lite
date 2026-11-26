@@ -125,14 +125,16 @@ Die Releases liegen unter [github.com/openccu-lite/openccu-lite/releases](https:
   Eine bestehende VM lässt sich auf UEFI umstellen, sobald sie eine Version mit UEFI-Unterstützung hat: ein Update
   bringt den UEFI-Bootloader mit. Unter Proxmox belässt `qm importovf` die Disk bei der Größe des Images, mit kaum
   Platz für Daten: vor dem ersten Start vergrößern, z. B. `qm resize <vmid> sata0 8G` (die Datenpartition übernimmt
-  den Platz beim nächsten Start), oder die VM mit dem Skript unten anlegen, das das erledigt.
-- **Proxmox per Skript:** als root auf dem Proxmox-VE-Host legt ein Skript die VM in einem Schritt an (`--help` zeigt
+  den Platz beim nächsten Start), oder die VM mit dem Script unten anlegen, das das erledigt.
+- **Proxmox per Script:** als root auf dem Proxmox-VE-Host legt ein Script die VM in einem Schritt an (`--help` zeigt
   die Optionen; `--bios ovmf` legt sie mit UEFI statt SeaBIOS an):
   `bash -c "$(wget -qLO - https://raw.githubusercontent.com/openccu-lite/openccu-lite/main/scripts/install-proxmox.sh)"`
 
 ## Wechsel von (Open)CCU zu openccu-lite
 
-Der empfohlene Weg ist ein Update über das bestehende System.
+Schritt für Schritt mit Bildern, mit Logic und der angebundenen Software:
+[Umstieg von einer CCU3 oder OpenCCU auf openccu-lite](docs/umstieg.md). Der empfohlene Weg ist ein Update über das
+bestehende System.
 
 - **Update:** In der WebUI unter *Einstellungen → Systemsteuerung → Zentralen-Wartung → Software-Update durchführen*
   die `openccu-lite-<produkt>-<version>.zip` hochladen, auf einer originalen CCU3 die `-ccu3.tgz`.
@@ -178,6 +180,8 @@ Beta- und Release-Candidate-Versionen) oder **dev** (alles, auch Entwicklungsst�
 ## Dokumentation
 
 **Erste Schritte**
+- [Umstieg von einer CCU3 oder OpenCCU](docs/umstieg.md): Schritt für Schritt mit Bildern, mit Logic, RedMatic,
+  ioBroker, Home Assistant und Node-RED
 - [Rundgang durch die Weboberfläche](docs/walkthrough/README.md): jede Seite mit Bild
 - [Wechsel von und zu OpenCCU](docs/switching.de.md)
 - [Logic: Programme und Systemvariablen](https://github.com/openccu-lite/lite-addon-logic/blob/main/docs/de/handbuch.md),
@@ -191,7 +195,7 @@ Beta- und Release-Candidate-Versionen) oder **dev** (alles, auch Entwicklungsst�
 - [Lokaler Schlüsselmodus für HmIP](docs/lokaler-schluesselmodus.md): offlinefähig, Funkmodultausch ohne den
   Schlüsselserver von eQ-3
 - [Zertifikate](docs/tls-acme.md) (eigene oder automatisch per ACME)
-- [Updates aus einer Pipeline](docs/update-pipeline.de.md): API-Token, Shell-Skript, Ansible-Playbook, Renovate
+- [Updates aus einer Pipeline](docs/update-pipeline.de.md): API-Token, Shell-Script, Ansible-Playbook, Renovate
 - [occulite-backup](https://github.com/openccu-lite/occulite-backup): Sicherungen eines oder mehrerer Systeme per Cron
   oder Timer herunterladen
 
