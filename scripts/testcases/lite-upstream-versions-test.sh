@@ -21,7 +21,9 @@
 # reads its tag (never the head); one column for the Latest release, a second only for a newer pre-release
 # (an older one and drafts ignored); a current cell carries the check disc, an outdated one does not; the
 # badge follows the latest release; the OpenCCU-Base row is exact only for the release that pins the
-# report's lite commit. The piVCCU drivers: each column's pin against alexreinert/piVCCU's default branch, the
+# report's lite commit, a release off lite's line is compared with OpenCCU's build by ancestry: lacking any of
+# its commits is a finding (1.2.5 on 3.89.11 against OpenCCU's 3.89.14), never "current"; an unreadable compare
+# exits 3. The piVCCU drivers: each column's pin against alexreinert/piVCCU's default branch, the
 # missing kernel/ commits one linked finding each, other missing commits a note; the fork's newest tags a note
 # when no column pins them; a tag that does not exist or an unreadable compare exits 3.
 #
@@ -126,12 +128,14 @@ pv_kernel() { # <sha>... the upstream commits touching kernel/
 }
 # base_report <generated date> <subject>...: the commits above the line. A subject is in OpenCCU's latest
 # release (and its master); "master|<subject>" only in OpenCCU's master, "main|<subject>" in neither.
-# BASE_REL_COMMIT / BASE_MASTER_COMMIT: the commits the two pins resolve to (null: not resolved)
+# BASE_REL_COMMIT / BASE_MASTER_COMMIT: the commits the two pins resolve to (null: not resolved);
+# BASE_REL_VER / BASE_REL_PIN: OpenCCU's latest release and its OpenCCU-Base pin
 BASE_REL_COMMIT='"3ed652a404d72cbe403e37c5b8b1f610451b02fb"'; BASE_MASTER_COMMIT='"79d0a44a2848e732a0f730a90e31f88209878e06"'
+BASE_REL_VER=3.89.11.20260919; BASE_REL_PIN=3.89.11
 base_report() {
   g=$1; shift
   { printf '{"generated": "%s 10:52 UTC", "lite": "'$BASE_LITE'", "boundary": {"sha": "423cde2b", "subject": "libXmlRpc: regenerate (#190)", "date": "2026-10-13T23:34:42+02:00"}, ' "$g"
-    printf '"openccu": {"release": {"openccu": "3.89.11.20260919", "name": "OpenCCU 3.89.11.20260919", "url": "https://github.com/OpenCCU/OpenCCU/releases/tag/3.89.11.20260919", "pin": "3.89.11", "commit": %s}, ' "$BASE_REL_COMMIT"
+    printf '"openccu": {"release": {"openccu": "%s", "name": "OpenCCU %s", "url": "https://github.com/OpenCCU/OpenCCU/releases/tag/%s", "pin": "%s", "commit": %s}, ' "$BASE_REL_VER" "$BASE_REL_VER" "$BASE_REL_VER" "$BASE_REL_PIN" "$BASE_REL_COMMIT"
     printf '"master": {"openccu": "2350302271", "name": "OpenCCU master", "url": "https://github.com/OpenCCU/OpenCCU/commit/2350302271", "pin": "79d0a44a2848e732a0f730a90e31f88209878e06", "commit": %s}}, "above": [' "$BASE_MASTER_COMMIT"
     sep=""; n=0
     for subj in "$@"; do
@@ -602,14 +606,69 @@ base; AUTOTAG=0; snap_tag v1.0.0; gh_releases v1.0.0 v1.1.0-dev.0:true:false
 expect "a release tag not in the checkout: exit 2" 2 "check failed" "release tag v1.1.0-dev.0 not in the checkout"
 base; echo '{"message": "Not Found"}' >"$tmp/fx/gh-release-latest.json"
 expect "no latest release: exit 3" 3 "check failed" "no latest release"
-# the OpenCCU-Base row: exact only for the release that pins the report's lite commit
-base; AUTOTAG=0; base_mk "$tmp/root/buildroot-external/package/openccu-base/openccu-base.mk" v0.9.0 '$(call github,openccu-lite,OpenCCU-Base,$(OPENCCU_BASE_VERSION))'
-contents openccu-lite_OpenCCU-Base-v0.9.0 $JAR_OURS; snap_tag v1.0.0
-base_mk "$tmp/root/buildroot-external/package/openccu-base/openccu-base.mk" v1.0.0-rc.3 '$(call github,openccu-lite,OpenCCU-Base,$(OPENCCU_BASE_VERSION))'
-snap_tag v1.1.0-dev.0; gh_releases v1.0.0 v1.1.0-dev.0:true:false v1.0.0
-expect "OpenCCU-Base: an older pin than lite's is a note" 0 "up to date" "this release pins v0.9.0 (8b96a44a74)"
-grep -qF '<td>OpenCCU-Base v0.9.0 (8b96a44a74), not lite&#x27;s line (d771beda34) <span class="note">not measured exactly</span></td><td>lite at: libXmlRpc: regenerate (#190) (2026-10-13) '"$ICON" "$tmp/site/en.html" \
-  && ok "OpenCCU-Base: the older release not measured exactly, no check disc; lite's release exact" || { bad "OpenCCU-Base: the older release not measured exactly"; grep 'OpenCCU-Base: in' "$tmp/site/en.html"; }
+# the OpenCCU-Base row: exact only for the release that pins the report's lite commit; a release off lite's line
+# is judged by ancestry against OpenCCU's build (GitHub's compare in the fork), never "current" on an unknown count
+base_cmp() { # <pin> <build commit> <status> <ahead_by> <behind_by> <merge base>
+  printf '{"status": "%s", "ahead_by": %s, "behind_by": %s, "total_commits": %s, "merge_base_commit": {"sha": "%s"}, "commits": [], "files": []}\n' \
+    "$3" "$4" "$5" "$4" "$6" >"$tmp/fx/base-compare-$(echo "$1" | cut -c1-10)-$(echo "$2" | cut -c1-10).json"
+}
+# the shape of 1.2.5: Latest v1.2.5 pins the fork's v1.2.5 (af69afa3c), 49 commits on 3.89.11; OpenCCU
+# 3.89.14.20261121 builds OpenCCU-Base 44bf79b5ff (3.89.14); the pre-release 2.0.0-rc.5 pins lite (57b929708d)
+B11=3ed652a404d72cbe403e37c5b8b1f610451b02fb; B14=44bf79b5ff01be9a20cbf8e2763dc08964e59157
+BV125=af69afa3ca54f7d655c3ea5b9679ada38a70ffeb; BLITE=57b929708dc8b37425c2e5d0a6137a05650c41b2
+BMASTER=ef0b1e7f419b3dfab1b034a14edcf1f3bc823df4
+shape_125() { # [<status> <ahead_by> of v1.2.5 against 3.89.14]
+  base; AUTOTAG=0; BL=$BASE_LITE; BASE_LITE=$BLITE
+  BASE_REL_VER=3.89.14.20261121; BASE_REL_PIN=$B14; BASE_REL_COMMIT="\"$B14\""; BASE_MASTER_COMMIT="\"$BMASTER\""
+  base_report 2026-10-24 'master|ci: check that every new changelog entry links its change (#402)'
+  BASE_REL_VER=3.89.11.20260919; BASE_REL_PIN=3.89.11; BASE_REL_COMMIT='"3ed652a404d72cbe403e37c5b8b1f610451b02fb"'
+  BASE_MASTER_COMMIT='"79d0a44a2848e732a0f730a90e31f88209878e06"'; BASE_LITE=$BL
+  printf '%s\trefs/tags/v1.2.5\n%s\trefs/tags/v1.2.5^{}\n%s\trefs/tags/v2.0.0-rc.5\n%s\trefs/tags/v2.0.0-rc.5^{}\n' \
+    5326f00465ef5156de967283d61f16f7e900deb5 $BV125 a1a1f00465ef5156de967283d61f16f7e900deb5 $BLITE >"$tmp/fx/fork-base-tags.txt"
+  printf '%s\trefs/tags/3.89.11\n%s\trefs/tags/3.89.11.20260919\n%s\trefs/tags/3.89.14\n%s\trefs/tags/v1.0.0-rc.3\n' \
+    $B11 $B11 $B14 $B14 >"$tmp/fx/openccu-base-tags.txt"
+  for x in openccu-lite_OpenCCU-Base-v1.2.5 openccu-lite_OpenCCU-Base-v2.0.0-rc.5 OpenCCU_OpenCCU-Base-3.89.14; do contents $x $JAR_OURS; done
+  base_cmp $BV125 $B14 "${1:-diverged}" "${2:-317}" 49 $B11; base_cmp $BV125 $BMASTER "${1:-diverged}" "$(( ${2:-317} + 5 ))" 49 $B11
+  M="$tmp/root/buildroot-external/package/openccu-base/openccu-base.mk"; S='$(call github,openccu-lite,OpenCCU-Base,$(OPENCCU_BASE_VERSION))'
+  base_mk "$M" v1.2.5 "$S"; snap_tag v1.2.5; base_mk "$M" v2.0.0-rc.5 "$S"; snap_tag v2.0.0-rc.5
+  gh_releases v1.2.5 v2.0.0-rc.5:true:false v1.2.5
+}
+shape_125
+expect "OpenCCU-Base: 1.2.5 on 3.89.11 against OpenCCU's 3.89.14 is an update, never current" 0 "$UPD" \
+  "::warning::update available - $BREL: OpenCCU 3.89.14.20261121 builds OpenCCU-Base 3.89.14; this release's v1.2.5 stems from 3.89.11 and lacks 317 of its commit(s) (all paths, not counted exactly for the paths openccu-lite uses) https://github.com/openccu-lite/OpenCCU-Base/compare/$BV125...$B14"
+[ "$(grep -c '::warning::' "$tmp/out")" -eq 1 ] \
+  && grep -qF "note - $BMAS: OpenCCU master builds OpenCCU-Base ef0b1e7f41; this release's v1.2.5 stems from 3.89.11 and lacks 322 of its commit(s)" "$tmp/out" \
+  && grep -qF "| $BREL | OpenCCU-Base v1.2.5 (af69afa3ca), not lite's line (57b929708d) | lite at: libXmlRpc: regenerate (#190) (2026-10-13) | OpenCCU 3.89.14.20261121 (OpenCCU-Base 44bf79b5ff): 0 commit(s) missing |  | update available |" "$tmp/sum" \
+  && grep -qF '<td>OpenCCU-Base v1.2.5 (af69afa3ca), nicht die Linie von lite (57b929708d) <span class="due">Update verfügbar</span></td><td>lite bei: libXmlRpc: regenerate (#190) (2026-10-13) '"$ICON" "$tmp/site/index.html" \
+  && grep -qF '<td>OpenCCU-Base v1.2.5 (af69afa3ca), not lite&#x27;s line (57b929708d) <span class="due">update available</span></td><td>lite at: libXmlRpc: regenerate (#190) (2026-10-13) '"$ICON" "$tmp/site/en.html" \
+  && grep -qF "OpenCCU 3.89.14.20261121 baut OpenCCU-Base 3.89.14; v1.2.5 dieses Releases stammt von 3.89.11 und ihm fehlen 317 seiner Commit(s) (alle Pfade, für die von openccu-lite genutzten nicht genau gezählt)</a></li>" "$tmp/site/index.html" \
+  && grep -qF '<td>OpenCCU-Base v1.2.5 (af69afa3ca), not lite&#x27;s line (57b929708d) <span class="note">not measured exactly</span></td><td>lite at: libXmlRpc: regenerate (#190) (2026-10-13) '"$ICON" "$tmp/site/en.html" \
+  && ok "OpenCCU-Base: 1.2.5's cell an update in the release row, not measured in the master row; rc.5 on lite's line exact, with its disc" \
+  || { bad "OpenCCU-Base: 1.2.5's cell an update, rc.5 exact"; cat "$tmp/out"; grep -F 'OpenCCU-Base' "$tmp/sum"; }
+# a pin off lite's line that holds OpenCCU's build (the compare: behind or identical) is current, with its disc
+shape_125 behind 0
+expect "OpenCCU-Base: a pin off lite's line holding OpenCCU's build is current" 0 "up to date" "all current"
+grep -qF '<td>OpenCCU-Base v1.2.5 (af69afa3ca), not lite&#x27;s line (57b929708d) '"$ICON" "$tmp/site/en.html" \
+  && ! grep -qF 'stems from' "$tmp/out" \
+  && ok "OpenCCU-Base: the pin holding the build gets the check disc, no count" || { bad "OpenCCU-Base: the pin holding the build gets the check disc"; cat "$tmp/out"; }
+shape_125 identical 0; expect "OpenCCU-Base: a pin identical with OpenCCU's build is current" 0 "up to date" "all current"
+# a release tagged before the fork moved into the organisation pins the former name: compared and linked by the new one
+shape_125; base_mk "$M" v1.2.5 '$(call github,hobbyquaker,OpenCCU-Base,$(OPENCCU_BASE_VERSION))'; contents hobbyquaker_OpenCCU-Base-v1.2.5 $JAR_OURS
+G tag -d v1.2.5 >/dev/null; G tag -d v2.0.0-rc.5 >/dev/null; snap_tag v1.2.5; base_mk "$M" v2.0.0-rc.5 "$S"; snap_tag v2.0.0-rc.5
+expect "OpenCCU-Base: a pin under the fork's former name is compared and linked under its new one" 0 "$UPD" \
+  "lacks 317 of its commit(s) (all paths, not counted exactly for the paths openccu-lite uses) https://github.com/openccu-lite/OpenCCU-Base/compare/$BV125...$B14"
+# the compare unreadable or without its numbers: a failed check, never green
+shape_125; rm "$tmp/fx/base-compare-af69afa3ca-44bf79b5ff.json"
+expect "OpenCCU-Base: the compare of a pin off lite's line unreachable: exit 3" 3 "check failed" "base-compare-af69afa3ca-44bf79b5ff.json"
+shape_125; echo '{"message": "Not Found"}' >"$tmp/fx/base-compare-af69afa3ca-44bf79b5ff.json"
+expect "OpenCCU-Base: a compare without its numbers: exit 3" 3 "check failed" "openccu-lite/OpenCCU-Base v1.2.5 against OpenCCU 3.89.14.20261121"
+# a merge base that carries no version tag is named by its short sha
+shape_125 ahead 3; base_cmp $BV125 $B14 ahead 3 0 1234567890abcdef1234567890abcdef12345678
+expect "OpenCCU-Base: a merge base without a version tag is named by its sha" 0 "$UPD" "this release's v1.2.5 stems from 1234567890 and lacks 3 of its commit(s)"
+# the release on lite's line stays exact: no compare asked for
+base; AUTOTAG=0; snap_tag v1.0.0; expect "OpenCCU-Base: a release on lite's line is exact without a compare" 0 "up to date" "all current"
+[ -z "$(find "$tmp/fx" -name 'base-compare-*')" ] && grep -qF '<td>lite at: libXmlRpc: regenerate (#190) (2026-10-13) '"$ICON" "$tmp/site/en.html" \
+  && ok "OpenCCU-Base: lite's release exact, with its disc" || bad "OpenCCU-Base: lite's release exact, with its disc"
 base; : >"$tmp/fx/fork-base-tags.txt"; expect "OpenCCU-Base: the release's pin tag unknown: exit 3" 3 "check failed" "no tag v1.0.0-rc.3"
 
 base; rm "$tmp/fx/releases.json"; expect "kernel.org unreachable: exit 3, grey" 3 "check failed" "::error::upstream unreachable"

@@ -73,9 +73,16 @@
 #                         OpenCCU release has. A report
 #                         older than BASE_REPORT_STALE_DAYS is a note. The counts link to that report.
 #                         The report measures the fork's lite head (report.json "lite"): a release column
-#                         whose OpenCCU-Base pin (its tag in fork-base-tags.txt) is that commit is exact;
-#                         an older one shows its pin, lite's commits above the line as a lower bound, a
-#                         note, and "not measured exactly" instead of the check mark.
+#                         whose OpenCCU-Base pin (its tag in fork-base-tags.txt) is that commit is exact.
+#                         Another one shows its pin and is judged by commit ancestry against the build the
+#                         row compares with (GitHub's compare of the pin with the build's commit in the
+#                         fork, base-compare-<pin>-<commit>.json): lacking none of its commits is current;
+#                         lacking any is a finding in the release row (a note in the master row), naming
+#                         the OpenCCU-Base version tags both stand on (the build's commit, the merge base)
+#                         and the count over all paths - "not counted exactly" for the paths we use, and
+#                         never "current". lite's commits above the line are listed for it as well. An
+#                         unreadable compare is a failed check. In the master row such a column's cell
+#                         says "not measured exactly" instead of the check mark.
 #   piVCCU drivers        GENERIC_RAW_UART_VERSION of package/generic_raw_uart, the tag of our fork
 #                         openccu-lite/piVCCU (openccu-lite tags it with each release, so a release column's
 #                         pin is the fork's tag of that name), compared with the default branch of
@@ -120,7 +127,8 @@
 #     contents-<owner>_<repo>-<ref>.json (the opt/HMServer listing), jar-<blob sha> (the jar, read by
 #     range), zulu-eol.json, base-report.json, pivccu-tags.txt (our fork's tags, git ls-remote output),
 #     pivccu-head.txt (alexreinert/piVCCU, git ls-remote --symref HEAD), pivccu-compare-<ref>.json,
-#     pivccu-kernel.json (the upstream commits touching kernel/)
+#     pivccu-kernel.json (the upstream commits touching kernel/), base-compare-<pin>-<commit>.json (the fork's
+#     OpenCCU-Base pin of a release off lite's line against OpenCCU's build, both shortened to 10 characters)
 #   --today YYYY-MM-DD the date the EOL warning counts from (the tests; default today, UTC)
 import argparse
 import datetime
@@ -165,6 +173,8 @@ AZUL_ARCHES = ["aarch64", "x64"]   # the architectures java-azul.mk downloads (l
 BASE_REPORT = "https://openccu-lite.github.io/OpenCCU-Base/"
 EQ3_BASE = "homematicip/OpenCCU-Base"   # eQ-3's own OpenCCU-Base repository
 BASE_REPORT_STALE_DAYS = 2
+BASE_FORK = "openccu-lite/OpenCCU-Base"   # our fork of it; a release tagged before the move pins the former name
+BASE_FORK_FORMER = ("hobbyquaker/OpenCCU-Base",)
 PIVCCU_FORK = "openccu-lite/piVCCU"
 # the fork's name before it moved into the organisation (2026-11-13): a release tagged before the move pins it
 # there, and GitHub redirects the old name - the same fork
@@ -1011,8 +1021,8 @@ def base_row(root, up, key, en, de):
     r = Row(key, en, de, BASE_REPORT)
     d = base_report(up)
     line, build = d["boundary"], d["openccu"][key.rsplit("-", 1)[1]]
-    # the report measures the fork's lite head; a release that pins that very commit gets its line, an older
-    # one (its OpenCCU-Base tag elsewhere) gets lite's commits above the line as a lower bound, said so
+    # the report measures the fork's lite head; a release that pins that very commit gets its line, another
+    # one (its OpenCCU-Base tag elsewhere) is compared with OpenCCU's build by ancestry (base_lack)
     src = base_source(read(root, BASE_MK))
     if not src:
         raise PinError(f"{BASE_MK}: no OPENCCU_BASE_VERSION or no GitHub OPENCCU_BASE_SITE")
@@ -1026,17 +1036,53 @@ def base_row(root, up, key, en, de):
     if not r.exact:
         r.ours = (f"OpenCCU-Base {ref} ({pinned[:10]}), not lite's line ({lite[:10] or '?'})",
                   f"OpenCCU-Base {ref} ({pinned[:10]}), nicht die Linie von lite ({lite[:10] or '?'})")
-        r.note(f"the OpenCCU-Base report measures the fork's lite ({lite[:10] or '?'}); this release pins {ref} "
-               f"({pinned[:10]}): at least the commits above lite's line are missing in it, not counted exactly",
-               f"der OpenCCU-Base-Bericht misst den lite des Forks ({lite[:10] or '?'}); dieses Release verwendet "
-               f"{ref} ({pinned[:10]}): mindestens die Commits über der Linie von lite fehlen darin, nicht genau gezählt")
     elif line:
         r.ours = (f"lite at: {line.get('subject', '?')} ({str(line.get('date', ''))[:10]})",
                   f"lite bei: {line.get('subject', '?')} ({str(line.get('date', ''))[:10]})")
     else:
         r.ours = ("lite has no upstream commit of main", "lite hat keinen Upstream-Commit von main")
     r.newest_link = BASE_REPORT
+    r.base_pin = (BASE_FORK if repo in BASE_FORK_FORMER else repo, ref, pinned)
     return r, d, build
+
+
+def base_lack(up, r, build):
+    """for a column whose pin is not lite's line: how many commits of the build its pin lacks, by commit
+    ancestry (GitHub's compare in the fork, whose network holds OpenCCU-Base's commits), and the version tags
+    of OpenCCU-Base the two stand on: (lack, the build's tag or short sha, the pin's base tag or short sha).
+    The count covers every path, not only those the report filters to: at least as many as matter to us,
+    possibly more, so it is never shown as exact."""
+    repo, ref, pinned = r.base_pin
+    commit = str(build["commit"])
+    d = up.api(f"repos/{repo}/compare/{pinned}...{commit}?per_page=1", f"base-compare-{pinned[:10]}-{commit[:10]}.json")
+    try:
+        status, lack = d["status"], d["ahead_by"]
+        base = str((d.get("merge_base_commit") or {}).get("sha") or "")
+        if status not in ("identical", "behind", "ahead", "diverged") or not isinstance(lack, int):
+            raise TypeError(f"status {status!r}, ahead_by {lack!r}")
+    except (KeyError, TypeError, AttributeError) as e:
+        raise UpstreamError(f"{repo} {ref} against {base_build(build)}: {e!r}") from e
+    if status in ("identical", "behind"):
+        lack = 0
+    named = {}
+    for t, c in up.tags(f"https://github.com/{BASE_UP}", "refs/tags/*", "openccu-base-tags.txt").items():
+        if BASE_TAG_RE.match(t) and (c not in named or ver_key(t) > ver_key(named[c])):
+            named[c] = t
+    return lack, named.get(commit, commit[:10]), named.get(base, base[:10] or "?")
+
+
+def base_compare_url(r, build):
+    repo, _, pinned = r.base_pin
+    return f"https://github.com/{repo}/compare/{pinned}...{build['commit']}"
+
+
+def base_lack_text(r, build, lack, theirs, stem):
+    """(en, de) of a column that lacks `lack` commits of the build"""
+    ref = r.base_pin[1]
+    return (f"{build['name']} builds OpenCCU-Base {theirs}; this release's {ref} stems from {stem} and lacks "
+            f"{lack} of its commit(s) (all paths, not counted exactly for the paths openccu-lite uses)",
+            f"{build['name']} baut OpenCCU-Base {theirs}; {ref} dieses Releases stammt von {stem} und ihm fehlen "
+            f"{lack} seiner Commit(s) (alle Pfade, für die von openccu-lite genutzten nicht genau gezählt)")
 
 
 def base_build(build):
@@ -1055,6 +1101,14 @@ def check_base_release(root, up):
     missing = [c for c in d["above"] if c["in_release"]]
     r.newest = (f"{base_build(build)}: {len(missing)} commit(s) missing",
                 f"{base_build(build)}: {len(missing)} Commit(s) fehlen")
+    if not r.exact:
+        # a release off lite's line: judged by ancestry against the release's own OpenCCU-Base, a finding when
+        # it lacks any of its commits - never "current" on an unknown count
+        lack, theirs, stem = base_lack(up, r, build)
+        if not lack:
+            r.exact, missing = True, []
+        else:
+            r.due(*base_lack_text(r, build, lack, theirs, stem), base_compare_url(r, build))
     for c in missing:
         when = str(c.get("date", ""))[:10]
         r.due(f"not taken yet: {when} {c['subject']}", f"noch nicht übernommen: {when} {c['subject']}", c["url"])
@@ -1079,6 +1133,12 @@ def check_base_master(root, up):
     missing = [c for c in d["above"] if c["in_master"] and not c["in_release"]]
     r.newest = (f"{base_build(build)}: {len(missing)} commit(s) missing",
                 f"{base_build(build)}: {len(missing)} Commit(s) fehlen")
+    if not r.exact:   # as in the release row, but a note: no released OpenCCU has master's commits
+        lack, theirs, stem = base_lack(up, r, build)
+        if not lack:
+            r.exact, missing = True, []
+        else:
+            r.note(*base_lack_text(r, build, lack, theirs, stem), base_compare_url(r, build))
     for c in missing:
         when = str(c.get("date", ""))[:10]
         r.note(f"in OpenCCU master, in no release: {when} {c['subject']}",
