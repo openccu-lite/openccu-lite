@@ -5,8 +5,9 @@
 # merged option whose dependencies are missing is dropped by Kconfig without a word, and an option
 # the lite products rely on that only the defconfig provides goes away with a defconfig change. The
 # check: every kernel .config of the build (<build dir>/linux-*/.config, not the headers, the
-# firmware or the tools) has each "CONFIG_X=y" line of the fragments as CONFIG_X=y, and none of
-# their "# CONFIG_X is not set" options as y or m. A build that has a kernel (BR2_LINUX_KERNEL=y in
+# firmware or the tools) has each "CONFIG_X=y" line of the fragments as CONFIG_X=y, each line with
+# another value ("CONFIG_X=6", a string) exactly as written, and none of their
+# "# CONFIG_X is not set" options as y or m. A build that has a kernel (BR2_LINUX_KERNEL=y in
 # $BR2_CONFIG) but no kernel .config is an error, not a pass; a build without one (lxc) passes.
 #
 # Usage: scripts/lite-kernel-fragment-guard.sh <build dir> [<fragment>...]
@@ -37,6 +38,15 @@ for c in "$BUILD"/linux-*/.config; do
 			echo "lite-kernel-fragment-guard: ERROR: $c lacks ${opt}=y, which $(basename "$f") sets (a dependency missing, or another fragment turns it off)" >&2
 			found=1
 		done
+		# the lines with a value other than y, which the kernel's .config must hold as they are
+		missing=$(grep -E '^CONFIG_[A-Za-z0-9_]+=' "$f" | grep -v '=y$' | grep -Fvx -f "$c")
+		if [ -n "$missing" ]; then
+			printf '%s\n' "$missing" | while IFS= read -r line; do
+				have=$(grep -E "^${line%%=*}=|^# ${line%%=*} is not set\$" "$c" | head -n 1)
+				echo "lite-kernel-fragment-guard: ERROR: $c has ${have:-no ${line%%=*}}, not ${line}, which $(basename "$f") sets" >&2
+			done
+			found=1
+		fi
 		for opt in $(sed -n 's/^# \(CONFIG_[A-Za-z0-9_]*\) is not set$/\1/p' "$f"); do
 			grep -Eq "^${opt}=[ym]\$" "$c" || continue
 			echo "lite-kernel-fragment-guard: ERROR: $c has ${opt} on, which $(basename "$f") turns off" >&2
