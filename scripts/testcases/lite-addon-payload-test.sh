@@ -84,6 +84,15 @@ expect nothere 0 "an unknown name: starts"
 expect '../x' 0 "a name with a slash: starts, nothing looked up"
 expect '' 0 "no name: starts"
 
+# occulited B-180: disabled after its unit was generated (the rc.d entry lost its executable bit)
+wrapper off; echo '#!/bin/sh' > "$RCD/off.script"; file off/bin/x
+expect off 0 "enabled, program there: starts"
+chmod 644 "$RCD/off"
+expect off 1 "disabled since the unit was generated: skipped, not failed"
+grep -q 'addon off: disabled (rc.d/off is not executable) - not started' "$T/err" && ok "off: one line naming it" || bad "off line: $(cat "$T/err")"
+chmod 755 "$RCD/off"
+expect off 0 "enabled again: starts"
+
 # the whole addon directory tagged and emptied
 wrapper whole; echo '#!/bin/sh' > "$RCD/whole.script"; mkdir -p "$AD/whole"; : > "$AD/whole/.nobackup"
 expect whole 1 "a tagged addon directory holding only the tag: skipped"

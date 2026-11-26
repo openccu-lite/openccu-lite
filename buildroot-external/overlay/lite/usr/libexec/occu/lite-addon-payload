@@ -20,6 +20,13 @@
 #     and every one of them holds nothing but its tag.
 # Exit 1 then, with one line for the journal; 0 in every other case - a check that cannot decide
 # must never keep an addon from starting.
+#
+# occulited B-180: also exit 1 when the addon was disabled after its unit was generated - its rc.d
+# entry has lost the executable bit (occulited disables a CCU's addons that need the ReGa or cannot
+# run here at the first start, while occu-addons.service has already generated their units and
+# queued addons.target). The start would fail with 126 ("Failed to start addon-<name>.service")
+# for an addon the pages call disabled; skipped, it is inactive and the next daemon-reload drops
+# the unit.
 set -u
 NAME=${1:-}
 RCD=${OCCU_ADDON_RCD:-/usr/local/etc/config/rc.d}          # overridable for tests
@@ -29,6 +36,12 @@ MARK='openccu-lite addon-rc wrapper'
 case "${NAME}" in
   ''|.*|*[!A-Za-z0-9_.-]*) exit 0 ;;
 esac
+
+# disabled since the unit was generated: the generator skips a non-executable entry
+if [ -f "${RCD}/${NAME}" ] && [ ! -x "${RCD}/${NAME}" ]; then
+  echo "addon ${NAME}: disabled (rc.d/${NAME} is not executable) - not started" >&2
+  exit 1
+fi
 
 missing() {
   echo "addon ${NAME}: its program files are missing ($1) - a backup keeps no .nobackup directory; not started, reinstall it (Addons page)" >&2
