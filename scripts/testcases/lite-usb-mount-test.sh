@@ -43,6 +43,8 @@ chmod +x "$T/udevadm" "$T/usbmount"
 export LITE_UDEVADM="$T/udevadm" LITE_USBMOUNT="$T/usbmount"
 # never this machine's mounts: the remove would unmount what it finds there
 : > "$T/mounts"; export LITE_MOUNTS="$T/mounts" LITE_USB_CONFIG="$T/usbstorage"
+# never this machine's /run: what the mount found goes here (occulited task 35)
+export LITE_USB_CHECKDIR="$T/check"
 
 sh "$TOOL" add sda1 >/dev/null; rc=$?
 [ $rc = 0 ] && grep -qx 'action=add' "$T/got" && grep -qx 'DEVNAME=/dev/sda1' "$T/got" && grep -qx 'ID_FS_TYPE=vfat' "$T/got" && grep -qx 'ID_FS_USAGE=filesystem' "$T/got" && grep -qx 'DEVPATH=/devices/platform/usb/sda/sda1' "$T/got" && ok "add: udev's facts reach usbmount" || bad "add: rc $rc, $(cat "$T/got")"
@@ -164,18 +166,29 @@ fsckrun() { rm -f "$T/fsck.log" "$T/got"; LITE_RAWDEV="$T/$1" sh "$TOOL" add sda
 rm -f "$T/usbstorage"
 out=$(fsckrun fat32-dirty); [ ! -e "$T/fsck.log" ] && grep -qx 'action=add' "$T/got" && ok "fsck off (no file): not checked, mounted" || bad "off: $(cat "$T/fsck.log" 2>&1)"
 case "$out" in *"<4>/dev/sda1 (vfat) was not unmounted cleanly; not checked"*) ok "a dirty stick is said, as a warning" ;; *) bad "dirty message: $out" ;; esac
+# occulited task 35: the state file occulited reads
+st() { sed -n "s/^$1=//p" "$T/check/sda1" 2>/dev/null; }
+[ "$(st STATE)" = unchecked ] && [ "$(st FSTYPE)" = vfat ] && [ -n "$(st AT)" ] && ok "task 35: a dirty, unchecked stick is recorded" || bad "record unchecked: $(cat "$T/check/sda1" 2>&1)"
+[ "$(stat -c %a "$T/check/sda1")" = 644 ] && [ "$(stat -c %a "$T/check")" = 755 ] && ok "task 35: the record is readable by occulited" || bad "record modes: $(stat -c '%a %n' "$T/check" "$T/check/sda1")"
+fsckrun fat32-clean >/dev/null; [ ! -e "$T/check/sda1" ] && ok "task 35: a clean mount removes the record" || bad "a clean mount kept: $(cat "$T/check/sda1")"
 printf 'FSCK_AT_DIRTY_MOUNT=0\n' > "$T/usbstorage"
 fsckrun fat32-dirty >/dev/null; [ ! -e "$T/fsck.log" ] && ok "fsck off (=0): not checked" || bad "=0 checked"
 printf '# the Storage page\nFSCK_AT_DIRTY_MOUNT="1"\n' > "$T/usbstorage"
 out=$(fsckrun fat32-dirty); grep -qx 'fsck.fat -a -w /dev/sda1' "$T/fsck.log" && grep -qx 'action=add' "$T/got" && ok "fsck on: a dirty FAT32 is checked with fsck.fat -a, then mounted" || bad "on fat32: $(cat "$T/fsck.log" "$T/got" 2>&1)"
 case "$out" in *"fsck says hello"*"found nothing to repair"*) ok "the check's output and result are logged" ;; *) bad "fsck log: $out" ;; esac
+[ "$(st STATE)" = clean ] && [ "$(st EXIT)" = 0 ] && ok "task 35: checked, nothing to repair: recorded" || bad "record clean: $(cat "$T/check/sda1" 2>&1)"
+out=$(FAKE_FSCK_RC=1 fsckrun fat32-dirty)
+[ "$(st STATE)" = repaired ] && [ "$(st EXIT)" = 1 ] && ok "task 35: repaired: recorded" || bad "record repaired: $(cat "$T/check/sda1" 2>&1)"
 fsckrun fat32-clean >/dev/null; [ ! -e "$T/fsck.log" ] && ok "fsck on: a clean FAT is not checked" || bad "clean checked"
 fsckrun fat16-dirty >/dev/null; grep -qx 'fsck.fat -a -w /dev/sda1' "$T/fsck.log" && ok "fsck on: a dirty FAT16 (state at 0x25)" || bad "fat16"
 out=$(FAKE_FSCK_RC=4 fsckrun fat32-dirty); rc=$?
 [ $rc = 0 ] && grep -qx 'action=add' "$T/got" && ok "a failed check still mounts the stick" || bad "fsck failure: rc $rc"
 case "$out" in *"<4>/dev/sda1: the check ended with exit 4"*) ok "a failed check is a warning" ;; *) bad "fsck failure message: $out" ;; esac
+[ "$(st STATE)" = failed ] && [ "$(st EXIT)" = 4 ] && ok "task 35: a failed check: recorded" || bad "record failed: $(cat "$T/check/sda1" 2>&1)"
+: > "$T/mounts"; sh "$TOOL" remove sda1 >/dev/null; [ ! -e "$T/check/sda1" ] && ok "task 35: the removal removes the record" || bad "the removal kept the record"
 sed -i 's/ID_FS_TYPE=vfat/ID_FS_TYPE=exfat/' "$T/udevadm"
 fsckrun exfat-dirty >/dev/null; grep -qx 'fsck.exfat -p /dev/sda1' "$T/fsck.log" && ok "fsck on: a dirty exFAT is checked with fsck.exfat -p" || bad "exfat: $(cat "$T/fsck.log" 2>&1)"
+out=$(FAKE_FSCK_RC=1 fsckrun exfat-dirty); case "$out" in *"repaired the filesystem (exit 1)"*) [ "$(st STATE)" = repaired ] && [ "$(st FSTYPE)" = exfat ] && ok "exFAT's exit 1 is a repair (exfatprogs: errors corrected)" || bad "exfat record: $(cat "$T/check/sda1")" ;; *) bad "exfat exit 1: $out" ;; esac
 fsckrun fat32-clean >/dev/null; [ ! -e "$T/fsck.log" ] && ok "fsck on: a clean exFAT is not checked" || bad "exfat clean checked"
 sed -i 's/ID_FS_TYPE=exfat/ID_FS_TYPE=ntfs/' "$T/udevadm"
 fsckrun fat32-dirty >/dev/null; [ ! -e "$T/fsck.log" ] && ok "fsck: only FAT and exFAT" || bad "ntfs checked"

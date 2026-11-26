@@ -27,6 +27,13 @@
 # kernel sets it at the mount and clears it at a clean unmount) is checked and repaired before it is
 # mounted - fsck.fat -a, fsck.exfat -p - and the result is logged. A clean stick is not checked.
 #
+# occulited task 35: what was found at the mount is also written for occulited, one file per
+# partition in /run/lite-usb-check/<kernel name> (KEY=VALUE lines, read without running them):
+# STATE=unchecked (dirty, the check is off), clean (checked, nothing to repair), repaired or failed,
+# with FSTYPE, EXIT (fsck's exit status) and AT (seconds since the epoch). A clean mount and the
+# removal remove the file. occulited's Storage page shows it, and Status warns of an unchecked or
+# failed one.
+#
 # Usage: lite-usb-mount add|remove <kernel name>   (sda1, sdb, mmcblk1p1)
 set -u
 action=${1:-}
@@ -43,6 +50,7 @@ RUNPARTS=${LITE_RUNPARTS:-run-parts}
 FSCK_FAT=${LITE_FSCK_FAT:-fsck.fat}
 FSCK_EXFAT=${LITE_FSCK_EXFAT:-fsck.exfat}
 UMOUNT_TRIES=${LITE_UMOUNT_TRIES:-5}
+CHECKDIR=${LITE_USB_CHECKDIR:-/run/lite-usb-check}
 
 # usbmount_alive: a process runs usbmount - its name (a script run by its #! line is named after
 # the file) or its command line (run through sh)
@@ -95,12 +103,22 @@ dirty() {
   esac
 }
 
+# record <state> [exit]: what the mount found, for occulited (task 35); never fails the mount
+record() {
+  mkdir -p "${CHECKDIR}" 2>/dev/null && chmod 0755 "${CHECKDIR}" 2>/dev/null
+  printf 'STATE=%s\nFSTYPE=%s\nEXIT=%s\nAT=%s\n' "$1" "${ID_FS_TYPE:-}" "${2:-}" "$(date +%s)" > "${CHECKDIR}/${name}.tmp" 2>/dev/null \
+    && chmod 0644 "${CHECKDIR}/${name}.tmp" && mv -f "${CHECKDIR}/${name}.tmp" "${CHECKDIR}/${name}" 2>/dev/null
+  return 0
+}
+
 # check_at_mount: fsck before the mount, when switched on and the volume is dirty; never fails the mount
 check_at_mount() {
+  rm -f "${CHECKDIR}/${name}" 2>/dev/null
   case "${ID_FS_TYPE:-}" in vfat|exfat) ;; *) return 0 ;; esac
   dirty "${LITE_RAWDEV:-${DEVNAME}}" "${ID_FS_TYPE}" || return 0
   if ! fsck_wanted; then
     echo "<4>${DEVNAME} (${ID_FS_TYPE}) was not unmounted cleanly; not checked (fsck at a dirty mount is off)"
+    record unchecked
     return 0
   fi
   if [ "${ID_FS_TYPE}" = vfat ]; then set -- "${FSCK_FAT}" -a -w "${DEVNAME}"; else set -- "${FSCK_EXFAT}" -p "${DEVNAME}"; fi
@@ -109,10 +127,14 @@ check_at_mount() {
   printf '%s\n' "${out}" | tail -n 20 | sed 's/^/  /'
   if [ ${frc} = 0 ]; then
     echo "${DEVNAME}: the check found nothing to repair"
-  elif [ ${frc} = 1 ] && [ "${ID_FS_TYPE}" = vfat ]; then
+    record clean 0
+  elif [ ${frc} = 1 ]; then
+    # fsck.fat: 1 = errors found and corrected; fsck.exfat (e2fsck's convention): 1 = corrected
     echo "<4>${DEVNAME}: the check repaired the filesystem (exit 1)"
+    record repaired 1
   else
     echo "<4>${DEVNAME}: the check ended with exit ${frc}; mounting it anyway"
+    record failed "${frc}"
   fi
   return 0
 }
@@ -185,6 +207,9 @@ fi
 if [ "${action}" = add ]; then
   clear_stale_lock
   check_at_mount
+fi
+if [ "${action}" = remove ]; then
+  rm -f "${CHECKDIR}/${name}" 2>/dev/null
 fi
 if [ "${action}" = remove ] && unmount_plain; then
   exit 0
