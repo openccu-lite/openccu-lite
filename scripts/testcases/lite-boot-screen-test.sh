@@ -233,6 +233,7 @@ grep -qF 'ACTION=="add", SUBSYSTEM=="graphics", KERNEL=="fb0", TAG+="systemd", E
 grep -qF 'ACTION=="remove", SUBSYSTEM=="graphics", KERNEL=="fb0", RUN+="/usr/bin/systemctl --no-block stop psplash-start.service"' "$PR" 2>/dev/null && ok "fb0's removal stops the splash" || bad "62-openccu-lite-psplash.rules must stop psplash-start on fb0's remove"
 DI="$U/psplash-start.service.d/10-openccu-lite.conf"
 grep -qx 'ConditionPathExists=/dev/fb0' "$DI" && grep -qx 'SuccessExitStatus=255' "$DI" && ok "psplash-start: skipped without fb0, and a vanished fb0 (exit 255) is no failure" || bad "psplash-start's drop-in must keep ConditionPathExists=/dev/fb0 and carry SuccessExitStatus=255"
+grep -qx 'ConditionPathExists=/dev/fb0' "$U/psplash-systemd.service.d/10-openccu-lite.conf" 2>/dev/null && ok "psplash-systemd: skipped without fb0 too, not failed at the unit it is bound to" || bad "psplash-systemd.service.d/10-openccu-lite.conf must carry ConditionPathExists=/dev/fb0"
 if cat "$U/psplash-start.service" "$U/psplash-start.service.d/"*.conf "$U/psplash-systemd.service.d/"*.conf 2>/dev/null | grep -q '^Restart='; then
   bad "psplash-start or psplash-systemd is restarted"
 else

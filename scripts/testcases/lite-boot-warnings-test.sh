@@ -114,6 +114,27 @@ has "$EXT/overlay/lite/usr/libexec/occu/initscript-wrapper" '= stopping ] && exi
 has "$U/occu-zram-swap.service" '[ "$$(systemctl is-system-running)" = stopping ] ||' "the zram swap is not removed at a shutdown"
 has "$U/lighttpd.service" 'LogFilterPatterns=~^\(\.\./src/gw_backend\.c\.[0-9]+\) (establishing connection failed: socket: tcp:127\.0\.0\.1:' "lighttpd's refused loopback backends are dropped"
 
+# the boot journal's lines that were no warnings of anything wrong: the progress helper bound to a
+# skipped splash, the paths tmpfiles found declared twice, and the first boot on a CCU3's userfs
+TD="$EXT/overlay/lite/usr/lib/tmpfiles.d"
+grep -qx 'ConditionPathExists=/dev/fb0' "$U/psplash-systemd.service.d/10-openccu-lite.conf" 2>/dev/null && ok "psplash-systemd is skipped without a framebuffer, like the splash it is bound to" || bad "psplash-systemd.service.d/10-openccu-lite.conf must carry ConditionPathExists=/dev/fb0"
+grep -q 'psplash-systemd' "$ALLOW" && bad "the allowlist still takes psplash-systemd's dependency failure" || ok "the allowlist no longer takes psplash-systemd's dependency failure"
+# post-build's own expression on systemd's legacy.conf: the directory line goes, the link stays
+LEG=$(sed -n 's/^\tsed -i \(.*\) "\${lite_legacy}"$/\1/p' "$PBS")
+printf '# comment\nd /run/lock 0755 root root -\nL /var/lock - - - - ../run/lock\nd /run/lock/subsys 0755 root root -\n' > "$T/legacy.conf"
+if [ -n "$LEG" ] && eval "sed -i $LEG \"\$T/legacy.conf\"" && [ "$(grep -c . "$T/legacy.conf")" = 3 ] && ! grep -q '^d /run/lock ' "$T/legacy.conf" && grep -qx 'L /var/lock - - - - ../run/lock' "$T/legacy.conf" && grep -qx 'd /run/lock/subsys 0755 root root -' "$T/legacy.conf"; then
+  ok "post-build takes exactly legacy.conf's /run/lock line out"
+else
+  bad "post-build's sed on legacy.conf: '$LEG' left: $(tr '\n' '|' < "$T/legacy.conf")"
+fi
+grep -qx 'd /run/lock 1775 root lock -' "$TD/00-openccu-lite-radio.conf" && ok "/run/lock is still declared, by the image's own file" || bad "00-openccu-lite-radio.conf must declare /run/lock"
+# no path twice in the image's own tmpfiles files
+dups=$(cat "$TD"/*.conf | grep -v '^#' | awk 'NF >= 2 && $1 !~ /^[zZ]/ { print $2 }' | sort | uniq -d)
+[ -z "$dups" ] && ok "the image's tmpfiles files declare no path twice" || bad "declared twice in $TD: $dups"
+[ ! -e "$EXT/package/xe-guest-utilities/tmpfile.conf" ] && ! grep -q 'tmpfiles\.d' "$EXT/package/xe-guest-utilities/xe-guest-utilities.mk" && ok "xe-guest-utilities installs no tmpfiles file (/var/cache is systemd's)" || bad "xe-guest-utilities installs a tmpfiles file again"
+has "$PBS" 'rm -f "${TARGET_DIR}/usr/lib/tmpfiles.d/30-xenstored.conf"' "a build tree made before loses xe-guest-utilities' tmpfiles file"
+grep -qx 'd /usr/local/etc 0755 root root -' "$TD/lite-userfs.conf" 2>/dev/null && ok "tmpfiles makes /usr/local/etc root's before occulited's state directory below it" || bad "lite-userfs.conf must hold: d /usr/local/etc 0755 root root -"
+
 # wired into the boot test
 grep -q 'lite-boot-warnings.sh' "$HERE/scripts/lite-qemu-test.sh" && ok "lite-qemu-test.sh runs the check" || bad "lite-qemu-test.sh does not run lite-boot-warnings.sh"
 

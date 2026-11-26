@@ -72,6 +72,23 @@ if [ -f "${lite_provision}" ] && [ -L "${TARGET_DIR}/root/.ssh" ]; then
 	sed -i '/^d-\{0,1\}[[:space:]][[:space:]]*\/root\/\.ssh[[:space:]]/d' "${lite_provision}"
 fi
 
+# systemd-tmpfiles: /run/lock is declared twice, by the image's 00-openccu-lite-radio.conf (1775
+# root:lock, for hmipserver's serial lock file) and by systemd's legacy.conf (0755 root). The first
+# one wins, and tmpfiles says so at every boot and every cleanup run: 'legacy.conf:14: Duplicate
+# line for path "/run/lock", ignoring.' The second declaration goes; legacy.conf's /var/lock link
+# stays.
+lite_legacy="${TARGET_DIR}/usr/lib/tmpfiles.d/legacy.conf"
+lite_radio_tmpfiles="${TARGET_DIR}/usr/lib/tmpfiles.d/00-openccu-lite-radio.conf"
+if [ -f "${lite_legacy}" ] && grep -q '^d[[:space:]][[:space:]]*/run/lock[[:space:]]' "${lite_radio_tmpfiles}" 2>/dev/null; then
+	sed -i '/^d[[:space:]][[:space:]]*\/run\/lock[[:space:]]/d' "${lite_legacy}"
+fi
+
+# systemd-tmpfiles: xe-guest-utilities declared /var/cache in a file of its own, which systemd's
+# var.conf declares as well ('var.conf:16: Duplicate line for path "/var/cache", ignoring.' on the
+# x86_64 image). The package no longer installs the file; a build tree that was made before keeps
+# it, so it is removed here.
+rm -f "${TARGET_DIR}/usr/lib/tmpfiles.d/30-xenstored.conf"
+
 # The clock's floor at the very start of the boot: PID 1 sets the clock forward to the mtime of
 # /usr/lib/clock-epoch when it is behind it. Without the file the floor is systemd's own built-in
 # epoch, months before the image, and on a board without a real-time clock the first seconds of the

@@ -1085,6 +1085,10 @@ if [ "$SYSTEMD" = 1 ] && [ "$FAILED" = 0 ]; then
       cat "$WORK/warncheck$b.txt"
     fi
   done
+  # systemd-tmpfiles' notes are below the warning level, so the check above does not see them: a
+  # path two files declare ("Duplicate line for path") and a path it refuses ("unsafe path
+  # transition"). Neither belongs in a boot's journal; both boots are asked.
+  R=$(guest 'journalctl --no-pager -o cat -t systemd-tmpfiles | grep -cE "Duplicate line for path|unsafe path transition"'); case "$R" in *'| 0'*) ;; *) fail "systemd-tmpfiles notes a duplicate or a refused path: $R"; guest 'journalctl --no-pager -o cat -t systemd-tmpfiles | sort -u | head -20';; esac
   # the seeded gateway is a documentation address nobody answers: the firmware update skips it with
   # a line, a success - it used to run eq3configcmd into three timeouts and fail the unit
   R=$(guest 'systemctl show -p Result --value occu-lgw-firmware-update.service; journalctl -b -u occu-lgw-firmware-update.service --no-pager -o cat | grep -c "no RF LAN gateway answers (10.0.2.200)"'); case "$R" in *'| success'*'| 1'*) ;; *) fail "occu-lgw-firmware-update did not skip the silent gateway as a success: $R";; esac

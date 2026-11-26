@@ -21,7 +21,6 @@
 # --- the kernel and the boot (every image) ---
 ^kernel: check access for rdinit=/init failed: -2, ignoring$ ## no initramfs; the kernel looks for one first
 ^kernel: eq3_char_loop: loading out-of-tree module taints kernel\.$ ## eQ-3's multiplexer module is out of tree by nature
-^systemd: Dependency failed for Start psplash-systemd progress communication helper\.$ ## headless QEMU has no framebuffer, so psplash-start fails (B-130)
 ^lighttpd: \(\.\./src/server\.c\.[0-9]+\) reducing server\.max-connections \([0-9]+\) to 1/10 server\.max-fds \([0-9]+\)$ ## lighttpd's own notice of its fd limit (B-254), logged at warning by lighttpd
 ^chronyd: System clock wrong by -?[0-9.]+ seconds$ ## chronyd's makestep at the start corrects a clock that ran without NTP (no RTC, the VM's drift across the test's reboot); the size depends on timing. chronyd logs both lines at warning with no setting for it: `logchange` would quiet this one but also a later real jump, and the step line has no threshold (task 346)
 ^chronyd: System clock was stepped by -?[0-9.]+ seconds$ ## the line above's step

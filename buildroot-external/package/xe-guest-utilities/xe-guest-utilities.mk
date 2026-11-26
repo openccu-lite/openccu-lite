@@ -52,9 +52,6 @@ endef
 define XE_GUEST_UTILITIES_INSTALL_INIT_SYSTEMD
 	$(INSTALL) -D -m 0644 $(XE_GUEST_UTILITIES_PKGDIR)/proc-xen.mount \
 		$(TARGET_DIR)/usr/lib/systemd/system/proc-xen.mount
-	$(INSTALL) -D -m 0644 $(XE_GUEST_UTILITIES_PKGDIR)/tmpfile.conf \
-		$(TARGET_DIR)/usr/lib/tmpfiles.d/30-xenstored.conf
-
 	$(INSTALL) -D -m 0644 $(XE_GUEST_UTILITIES_PKGDIR)/xe-daemon.service \
 		$(TARGET_DIR)/usr/lib/systemd/system/xe-daemon.service
 endef
