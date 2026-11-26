@@ -224,9 +224,7 @@ OpenCCU da, Probleme mit openccu-lite bitte nicht dort melden.
 
 openccu-lite steht auf der Arbeit anderer. Danke an:
 
-- **[eQ-3](https://www.eq-3.de/)**, dafür, dass sie rfd, hs485d und multimacd im Quelltext veröffentlicht haben.
-- **[Jens Maus](https://github.com/jens-maus)** für seine Arbeit an [OpenCCU](https://github.com/OpenCCU/OpenCCU),
-  ohne die openccu-lite nicht möglich gewesen wäre.
+- **[Jens Maus](https://github.com/jens-maus)** für seine Arbeit an [OpenCCU](https://github.com/OpenCCU/OpenCCU).
 - **[Alexander Reinert](https://github.com/alexreinert)** für seine Treiber aus
   [piVCCU](https://github.com/alexreinert/piVCCU).
 - **[Mathias Dzionsko](https://github.com/mdzio)** für das Go-Modul

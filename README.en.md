@@ -220,9 +220,7 @@ openccu-lite's problems there.
 
 openccu-lite stands on the work of others. Thanks to:
 
-- **[eQ-3](https://www.eq-3.de/)**, for publishing the source code of rfd, hs485d and multimacd.
-- **[Jens Maus](https://github.com/jens-maus)** for his work on [OpenCCU](https://github.com/OpenCCU/OpenCCU), without
-  which openccu-lite would not have been possible.
+- **[Jens Maus](https://github.com/jens-maus)** for his work on [OpenCCU](https://github.com/OpenCCU/OpenCCU).
 - **[Alexander Reinert](https://github.com/alexreinert)** for his drivers from
   [piVCCU](https://github.com/alexreinert/piVCCU).
 - **[Mathias Dzionsko](https://github.com/mdzio)** for the Go module
