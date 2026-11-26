@@ -342,7 +342,9 @@ from outside.
 ## Radio keys
 
 - **The BidCos-RF security key** is in `/etc/config/keys` (rfd's, 0600). Set it on System → Keys; the default key is
-  public.
+  public. The file is there on every system, made empty at rfd's first start so that rfd, which runs as its own
+  user, can write it later; empty means no key is set and the default key is in use - the same state as a CCU
+  without the file, also after a switch from one and in a backup.
 - **The HmIP keys** — the network key and the device keys (`/etc/config/crRFD/sgtin.map`, 0640) — are stored in clear,
   because hmipserver needs them that way; hmipserver's data directory is 0700 with 0600 files. Every route that
   touches device keys needs the scope `radio:keys`, which only Full access includes and an addon's token never gets.
