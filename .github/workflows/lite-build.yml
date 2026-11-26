@@ -177,6 +177,7 @@ jobs:
           sh scripts/testcases/lite-dhcp6-test.sh
           sh scripts/testcases/lite-usb-mount-test.sh
           sh scripts/testcases/lite-classic-rpc-conf-test.sh
+          sh scripts/testcases/lite-reserved-ports-test.sh
       - name: The interface daemons run confined
         # the users table, the udev rules and the tmpfiles line, every daemon unit's user and
         # sandbox with the device drop-in and its marker condition, occulited's root steps in the

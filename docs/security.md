@@ -90,6 +90,12 @@ interface daemons' RPC ports on the loopback have no authentication.
 | lighttpd, classic RPC | the LAN, 2001/2010/9292/2000 (plain) and 42001/42010/49292/42000 (TLS), only while switched on | CCU clients off the system |
 | lighttpd, an addon's web ingress | the Unix socket `/run/lighttpd-addons/<id>/proxy.sock` (PROXY protocol), one per addon whose manifest declares `runtime.web_ingress` | that addon alone |
 
+The fixed ports of the system that lie in the kernel's ephemeral range (32768-60999) - hmipserver's 39292 and udp
+43438, occulited's udp 43439 (its answer to eQ-3's network discovery) and the classic RPC TLS ports 42000, 42001, 42010
+and 49292 - are reserved in `net.ipv4.ip_local_reserved_ports` (`/usr/lib/sysctl.d/61-openccu-lite-reserved-ports.conf`,
+applied before any service starts), so an outgoing connection is never handed one of them while its server is down.
+Addon ports are not on that list.
+
 The ReGa ports 1999 and 8181 do not exist. An integration that ran off the system and spoke to the interface
 daemons' ports runs on the system instead, uses lite-rpc over the web port with a token, or needs classic RPC.
 
