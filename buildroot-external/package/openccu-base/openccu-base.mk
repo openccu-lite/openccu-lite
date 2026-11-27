@@ -18,7 +18,7 @@
 # (PRODUCT_VERSION, the recovery's hm-platform; the top Makefile reads both lines) and stays the
 # release while the version is a tag of the fork; LITE-VERSION's BASE is the same release (D-127,
 # lite-version-file-test.sh checks it).
-OPENCCU_BASE_VERSION = v2.0.0
+OPENCCU_BASE_VERSION = v2.0.1
 OPENCCU_BASE_COMPAT_VERSION = 3.89.14
 # GitHub's archive of that tag (the recovery's hm-platform downloads OpenCCU-Base's own
 # release archive of the compat version), pruned right after the extract to the paths
