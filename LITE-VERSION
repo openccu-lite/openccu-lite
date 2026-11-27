@@ -5,5 +5,5 @@
 # build list (never reused); a release is built with VERSION as it is.
 # BASE is the OpenCCU-Base release the image is built from (the OpenCCU-Base pin's
 # OPENCCU_BASE_COMPAT_VERSION): /VERSION's VERSION= line and hmipserver's getVersion (D-127).
-VERSION=2.0.0
+VERSION=2.0.1
 BASE=3.89.14
